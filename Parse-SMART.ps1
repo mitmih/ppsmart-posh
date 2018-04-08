@@ -89,7 +89,7 @@ foreach ($DrivesReportFile in $WMIFiles) {
         'saFlagString'`
         | Export-Csv -Append -NoTypeInformation -Path $DrivesReportFile.Replace('drives', '_smart')
     }
-    Remove-Item -Path $DrivesReportFile  # удаляем прочитанный отчёт с "сырыми" данными
+    # Remove-Item -Path $DrivesReportFile  # удаляем прочитанный отчёт с "сырыми" данными
 }
 
 # замер времени выполнения скрипта
