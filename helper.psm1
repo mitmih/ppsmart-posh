@@ -262,3 +262,53 @@ function Convert-Flags ([int] $flagDec) {
     $b5 = if (($flagDec -band  32) -gt 0) {'S'} else {'-'}  # bitmask 100000
     return "$b5 $b4 $b3 $b2 $b1 $b0"
 }
+
+function Convert-hex2txt ([string] $wmisn) {
+<#
+.SYNOPSIS
+    функция конвертирует серийный номер жёсткого диска из шестнадцатиричного в текстовый формат
+
+.DESCRIPTION
+    ОС Windows 7 хранит в WMI серийный номер в шестнадцатиричном формате, причем байты по-парно
+    поменяны местами, а ОС Windows 10 - в текстовом, совпадающем с номером на наклейке ЖД
+
+    функция проверяет формат серийного номера
+    при необходимости конвертирует шестнадцатиричный серийный номер в текст, исправляя порядок символов
+    
+    например: win7 format                        -> win10 format
+        56394b4d37345130202020202020202020202020 -> 9VMK470Q
+        32535841394a5a46354138333932202020202020 -> S2AXJ9FZA53829
+        5639514d42363439202020202020202020202020 -> 9VMQ6B94
+
+
+.INPUTS
+    строка с серийным номером ЖД из WMI
+
+.OUTPUTS
+    нормализованная строка строка с серийным номером 
+
+.PARAMETER wmisn
+    строка с серийным номером из WMI
+
+.EXAMPLE
+    $TXTSerialNumber = Convert-hex2txt -wmisn $WMISerialNumber
+
+.LINK
+    https://blogs.technet.microsoft.com/heyscriptingguy/2011/09/09/convert-hexadecimal-to-ascii-using-powershell/
+
+.NOTES
+    Author: Dmitry Mikhaylov
+
+#>
+
+
+    if ($wmisn.Length -eq 40) {  # проверка на длину
+        $txt = ""
+        for ($i = 0; $i -lt 40; $i = $i + 4) {
+            $txt = $txt + [CHAR][CONVERT]::toint16("$($wmisn[$i+2])$($wmisn[$i+3])",16) + [CHAR][CONVERT]::toint16("$($wmisn[$i+0])$($wmisn[$i+1])",16)
+        }
+        
+    } else {$txt = $wmisn}
+
+    return $txt.Trim()
+}

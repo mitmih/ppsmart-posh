@@ -20,7 +20,7 @@
         "HostName","Status"
         "MyHomePC",""
         "laptop",""
-    
+
     в обязательном поле "HostName" указываются имена компьютеров
     поле "Status" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
 
@@ -59,7 +59,7 @@ param
 (
     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
 #     [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
-    [string] $Out = ".\output\$('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
+    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
 )
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
@@ -119,7 +119,7 @@ foreach ($C in $Computers) {
         $DiskInfo += (New-Object psobject -Property @{
             ScanDate      =          $TimeStart
             HostName      = [string] $C.HostName
-            SerialNumber  = [string] $Disk.SerialNumber.Trim()
+            SerialNumber  = Convert-hex2txt -wmisn [string] $Disk.SerialNumber.Trim()
             Model         = [string] $Disk.Model
             Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
             InterfaceType = [string] $Disk.InterfaceType
