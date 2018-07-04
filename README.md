@@ -7,3 +7,4 @@ This tool kit consists of two parts:
 - ppsmart-py (in plans) - django web app to parse, analyze and display S.M.A.R.T. data
 
 # ppsmart-posh
+https://github.com/mitmih/ppsmart-posh

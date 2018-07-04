@@ -26,6 +26,9 @@
         получить S.M.A.R.T. атрибуты дисков локального компьютера
 
 .LINK
+    github-page
+        https://github.com/mitmih/ppsmart-posh
+
     интерпретация атрибутов
         https://3dnews.ru/618813
         http://www.ixbt.com/storage/hdd-smart-testing.shtml

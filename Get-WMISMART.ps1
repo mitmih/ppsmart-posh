@@ -46,6 +46,9 @@
         получить S.M.A.R.T. атрибуты дисков компьютеров из списка debug.csv
 
 .LINK
+    github-page
+        https://github.com/mitmih/ppsmart-posh
+
     не очень корректное описание структуры 512-байт массива S.M.A.R.T.: тут написано, что 1й блок начинается сразу с 0го байта, а на самом деле первые два байта означают версию структуры S.M.A.R.T.
         https://social.msdn.microsoft.com/Forums/en-US/af01ce5d-b2a6-4442-b229-6bb32033c755/using-wmi-to-get-smart-status-of-a-hard-disk?forum=vbgeneral
 
