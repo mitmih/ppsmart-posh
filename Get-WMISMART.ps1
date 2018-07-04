@@ -122,7 +122,7 @@ foreach ($C in $Computers) {
         $DiskInfo += (New-Object psobject -Property @{
             ScanDate      =          $TimeStart
             HostName      = [string] $C.HostName
-            SerialNumber  = Convert-hex2txt -wmisn [string] $Disk.SerialNumber.Trim()
+            SerialNumber  = Convert-hex2txt -wmisn [string] $Disk.SerialNumber  #.Trim()
             Model         = [string] $Disk.Model
             Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
             InterfaceType = [string] $Disk.InterfaceType
