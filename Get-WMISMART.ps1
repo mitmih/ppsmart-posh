@@ -69,7 +69,7 @@ Clear-Host
 $TimeStart = Get-Date # замер времени выполнения скрипта
 set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # локальная корневая папка "./" = текущая директория скрипта
 
-# Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
 #if ($Out -eq "") {$Out = ".\output\$('{0:yyyy-MM-dd_HH-mm}' -f $TimeStart)_drives.csv"}
 
@@ -122,7 +122,7 @@ foreach ($C in $Computers) {
         $DiskInfo += (New-Object psobject -Property @{
             ScanDate      =          $TimeStart
             HostName      = [string] $C.HostName
-            SerialNumber  = Convert-hex2txt -wmisn [string] $Disk.SerialNumber  #.Trim()
+            SerialNumber  = Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  #.Trim()
             Model         = [string] $Disk.Model
             Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
             InterfaceType = [string] $Disk.InterfaceType
