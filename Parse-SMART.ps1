@@ -63,10 +63,11 @@ foreach ($DrivesReportFile in $WMIFiles) {
     $AtrInfo = $null
     foreach ($disk in $Drives) {
         $AtrInfo = Convert-WMIArrays -data ([int[]] $disk.WMIData.Split(' ')) -thresh ([int[]] $disk.WMIThresholds.Split(' '))
-        $AtrInfo | Add-Member -MemberType NoteProperty -Name ScanDate -Value $disk.ScanDate
-        $AtrInfo | Add-Member -MemberType NoteProperty -Name PC       -Value $disk.HostName
-        $AtrInfo | Add-Member -MemberType NoteProperty -Name Model    -Value $disk.Model
-        $AtrInfo | Add-Member -MemberType NoteProperty -Name SerNo    -Value $disk.SerialNumber
+        $AtrInfo | Add-Member -MemberType NoteProperty -Name ScanDate  -Value $disk.ScanDate
+        $AtrInfo | Add-Member -MemberType NoteProperty -Name PC        -Value $disk.HostName
+        $AtrInfo | Add-Member -MemberType NoteProperty -Name Model     -Value $disk.Model
+        $AtrInfo | Add-Member -MemberType NoteProperty -Name SerNo     -Value $disk.SerialNumber
+        $AtrInfo | Add-Member -MemberType NoteProperty -Name WMIStatus -Value $disk.WMIStatus
 
         foreach ($atr in $AtrInfo) {$atr | Add-Member -MemberType NoteProperty -Name saFlagString -Value $(Convert-Flags -flagDec ([System.Convert]::ToInt32($atr.saFlagBin,2)))}  # флаги bin-to-char
 
@@ -76,9 +77,11 @@ foreach ($DrivesReportFile in $WMIFiles) {
         'PC',`
         'Model',`
         'SerNo',`
+        'WMIStatus',`
         'saIDHex',`
         'saIDDec',`
         'saName',`
+        'saRaw',`
         'saValue',`
         'saWorst',`
         'saThreshold',`
@@ -87,7 +90,6 @@ foreach ($DrivesReportFile in $WMIFiles) {
         'saFullHex',`
         'saFullDec',`
         'saFlagDec',`
-        'saRaw',`
         'saFlagBin',`
         'saFlagString'`
         | Export-Csv -Append -NoTypeInformation -Path $DrivesReportFile.Replace('drives', '_smart')

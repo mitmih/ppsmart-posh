@@ -60,8 +60,8 @@
 
 param
 (
-    [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-#     [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
+#    [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
+    [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
 )
 $psCmdlet.ParameterSetName | Out-Null
@@ -86,7 +86,13 @@ foreach ($C in $Computers) {
     $p += 1
     Write-Progress -PercentComplete (100 * $p / $t) -Activity $Inp -Status "обрабатываю $p-й компьютер из $t" -CurrentOperation $C.HostName
 
-    if (!(Test-Connection -Count 1 -ComputerName $C.HostName -Quiet)) {  # если хост офф-лайн: сообщим в консоль и перейдём к следующему хосту
+    $PingTest = $false  # оптимизированная проверка связи, если он-лайн, то переходим к получению данных, если оф-лайн - делаем ещё несколько пингов
+    for ($i = 0; $i -lt 3; $i++) {
+        $PingTest = (Test-Connection -Count 1 -ComputerName $C.HostName -Quiet)
+        if ($PingTest) {break}
+    }
+
+    if (!$PingTest) {  # если хост офф-лайн: сообщим в консоль и перейдём к следующему хосту
         $C.Status = "off-line"
         Write-Host "$($C.HostName) off-line" -ForegroundColor Red
         continue
