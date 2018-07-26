@@ -60,9 +60,10 @@
 
 param
 (
-#    [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
+#     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
     [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
-    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
+    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv"
+#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
 )
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
@@ -75,58 +76,65 @@ if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New
 
 if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
 
-if ($Computers.HostName -is [array]) {$t = $Computers.HostName.Length} else {$t = 1}
-
 # Multy-Threading: распараллелим проверку доступности компа по сети
 #region создаём пул runspace`ов
-$RSPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS + 1) # +0=21s; +1,+2=14..16s;
-$RSPool.ApartmentState = "MTA"
-$RSPool.Open()
-$RunSpaces = @()
-$RSComputers = @()
+$PingPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * 1 + 1)
+$PingPool.ApartmentState = "MTA"
+$PingPool.Open()
+$PingRunSpaces = @()
+$ComputersOnLine = @()
 #endregion
 
 #region что будет распараллелено
-$RSPayload = {Param ([string] $name = '127.0.0.1')
+$PingPayload = {Param ([string] $name = '127.0.0.1')
+    $ping = $false
     for ($i = 0; $i -lt 3; $i++) {
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
         if ($ping) {break}
     }
 
-    Return (New-Object psobject -Property @{HostName = $name;Status = if ($ping) {"online"} else {'offline'};})
+    Return (New-Object psobject -Property @{HostName = $name;Status = $ping;})
 }
 #endregion
 
 #region создаём runspace`ы, запускаем и добавляем их в пул
 foreach ($C in $Computers) {
+    $PingNewShell = [PowerShell]::Create()
 
-    $RS = [PowerShell]::Create()
+    $null = $PingNewShell.AddScript($PingPayload)
+    $null = $PingNewShell.AddArgument($C.HostName)
 
-    $null = $RS.AddScript($RSPayload)
-    $null = $RS.AddArgument($C.HostName)
+    $PingNewShell.RunspacePool = $PingPool
 
-    $RS.RunspacePool = $RSPool
-
-    $RunSpaces += [PSCustomObject]@{ Pipe = $RS; Status = $RS.BeginInvoke() }
+    $PingRunSpaces += [PSCustomObject]@{ Pipe = $PingNewShell; Status = $PingNewShell.BeginInvoke() }
 }
 #endregion
 
-#region после завершения всех запущенных потоков собираем данные и закрываем потоки и пул
-while ($RunSpaces.Status.IsCompleted -notcontains $true) {}
-foreach ($RS in $RunSpaces ) {
-    $RSComputers += $RS.Pipe.EndInvoke($RS.Status)
-    $RS.Pipe.Dispose()
-}
+#region после завершения всех запущенных потоков собираем данные, закрываем потоки и пул
+if ($PingRunSpaces.Count -gt 0) {  # а были ли запущены потоки? - был баг: файл со списком был пуст, ни одного компа, и скрипт зависал на цилке while, потому-что ждал завершения хотя бы одного потока, а потоков то и не было...
+    while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {}  # после завершения хотя бы одного потока сохраняем его данные
 
-$RSPool.Close()
-$RSPool.Dispose()
+    foreach ($RS in $PingRunSpaces ) {
+        $t = ($PingRunSpaces.Status).Count  # общее кол-во потоков
+        $p = ($PingRunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+        Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера" -Status "всего: $t" -CurrentOperation "осталось: $p"
+
+        $ComputersOnLine += $RS.Pipe.EndInvoke($RS.Status)
+
+        $RS.Pipe.Dispose()
+    }
+#     $PingRunSpaces.Status
+    $PingPool.Close()
+    $PingPool.Dispose()
+}
 #endregion
 
 $DiskInfo = @()
+if ($ComputersOnLine.HostName -is [array]) {$t = $ComputersOnLine.HostName.Length} else {$t = 1}
 $p = 0  # прогресс-бар: $p - счётчик (текущий комп), $t - общее количество (всего компов к обработке)
-foreach ($C in $RSComputers | Where-Object {$_.Status -eq 'online'}) {
+foreach ($C in $ComputersOnLine | Where-Object {$_.Status -eq 'online'}) {
     $p += 1
-    Write-Progress -PercentComplete (100 * $p / $t) -Activity $Inp -Status "обрабатываю $p-й компьютер из $t" -CurrentOperation $C.HostName
+    Write-Progress -id 2 -PercentComplete (100 * $p / $t) -Activity $Inp -Status "обрабатываю $p-й компьютер из $t" -CurrentOperation $C.HostName
 
     Write-Host "`n$($C.HostName) $($C.Status)" -ForegroundColor Green
 
@@ -189,7 +197,7 @@ $DiskInfo | Select-Object `
     | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
 
 # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
-if (Test-Path -Path $Inp) {$Computers | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
+if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "Status" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
 
 # замер времени выполнения скрипта
 $ExecTime = [System.Math]::Round($( $(Get-Date) - $TimeStart ).TotalSeconds,1)
