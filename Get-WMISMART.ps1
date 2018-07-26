@@ -76,19 +76,20 @@ if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New
 
 if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
 
+$ComputersOnLine = @()
+$DiskInfo = @()
+
 # Multy-Threading: распараллелим проверку доступности компа по сети
 #region создаём пул runspace`ов
 $PingPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * 1 + 1)
 $PingPool.ApartmentState = "MTA"
 $PingPool.Open()
 $PingRunSpaces = @()
-$ComputersOnLine = @()
 #endregion
 
-#region что будет распараллелено
+#region что будет распараллелено - $PingPayload
 $PingPayload = {Param ([string] $name = '127.0.0.1')
-    $ping = $false
-    for ($i = 0; $i -lt 3; $i++) {
+    for ($i = 0; $i -lt 3; $i++) {  # быстрее чем 'Test-Connection -Count 3'
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
         if ($ping) {break}
     }
@@ -111,25 +112,21 @@ foreach ($C in $Computers) {
 #endregion
 
 #region после завершения всех запущенных потоков собираем данные, закрываем потоки и пул
-if ($PingRunSpaces.Count -gt 0) {  # а были ли запущены потоки? - был баг: файл со списком был пуст, ни одного компа, и скрипт зависал на цилке while, потому-что ждал завершения хотя бы одного потока, а потоков то и не было...
-    while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {}  # после завершения хотя бы одного потока сохраняем его данные
+if ($PingRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
+    while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {$t = ($PingRunSpaces.Status).Count <#общее кол-во потоков#>}  # после завершения хотя бы одного потока начинаем принимать данные
 
     foreach ($RS in $PingRunSpaces ) {
-        $t = ($PingRunSpaces.Status).Count  # общее кол-во потоков
         $p = ($PingRunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
         Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера" -Status "всего: $t" -CurrentOperation "осталось: $p"
 
         $ComputersOnLine += $RS.Pipe.EndInvoke($RS.Status)
-
         $RS.Pipe.Dispose()
     }
-#     $PingRunSpaces.Status
     $PingPool.Close()
     $PingPool.Dispose()
 }
 #endregion
 
-$DiskInfo = @()
 if ($ComputersOnLine.HostName -is [array]) {$t = $ComputersOnLine.HostName.Length} else {$t = 1}
 $p = 0  # прогресс-бар: $p - счётчик (текущий комп), $t - общее количество (всего компов к обработке)
 foreach ($C in $ComputersOnLine | Where-Object {$_.Status -eq 'online'}) {
