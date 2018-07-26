@@ -162,8 +162,9 @@ foreach ($C in $Computers) {
 
 #region: Ping:      после завершения потока собираем данные и закрываем, пул закрываем после завершения всех потоков
 if ($PingRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
-    while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {$t = ($PingRunSpaces.Status).Count <#общее кол-во потоков#>}  # после завершения хотя бы одного потока начинаем принимать данные
+    while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {}  # после завершения хотя бы одного потока начинаем принимать данные
 
+    $t = ($PingRunSpaces.Status).Count  # общее кол-во потоков
     foreach ($RS in $PingRunSpaces ) {
         $p = ($PingRunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
         Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера" -Status "всего: $t" -CurrentOperation "осталось: $p"
@@ -191,8 +192,9 @@ foreach ($C in $ComputersOnLine | Where-Object {$_.Status -eq 'online'}) {
 
 #region: WMI:       после завершения потока собираем данные и закрываем, пул закрываем после завершения всех потоков
 if ($WMIRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
-    while ($WMIRunSpaces.Status.IsCompleted -notcontains $true) {$t = ($WMIRunSpaces.Status).Count <#общее кол-во потоков#>}  # после завершения хотя бы одного потока начинаем принимать данные
+    while ($WMIRunSpaces.Status.IsCompleted -notcontains $true) {}  # после завершения хотя бы одного потока начинаем принимать данные
 
+    $t = ($WMIRunSpaces.Status).Count  # общее кол-во потоков
     foreach ($RS in $WMIRunSpaces ) {
         $p = ($WMIRunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
         Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "получение из WMI данных по жёстким дискам" -Status "всего: $t" -CurrentOperation "осталось: $p"
