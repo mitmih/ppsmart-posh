@@ -42,8 +42,8 @@
         получить S.M.A.R.T. атрибуты компьютера HOST_NAME
 
 .EXAMPLE
-    .\Get-WMISMART.ps1 .\input\debug.csv
-        получить S.M.A.R.T. атрибуты дисков компьютеров из списка debug.csv
+    .\Get-WMISMART.ps1 .\input\hostname_list.csv
+        получить S.M.A.R.T. атрибуты дисков компьютеров из списка hostname_list.csv
 
 .LINK
     github-page
@@ -61,9 +61,9 @@
 param
 (
 #     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
-    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv"
-#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
+    [string] $Inp = ".\input\hostname_list.csv",  # имя хоста либо путь к файлу списка хостов
+#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv"
+    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
 )
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
@@ -80,14 +80,19 @@ $ComputersOnLine = @()
 $DiskInfo = @()
 
 # Multy-Threading: распараллелим проверку доступности компа по сети
-#region создаём пул runspace`ов
+#region: Ping, WMI: создаём пул потоков
 $PingPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * 1 + 1)
 $PingPool.ApartmentState = "MTA"
 $PingPool.Open()
 $PingRunSpaces = @()
+
+$WMIPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * 1 + 1)
+$WMIPool.ApartmentState = "MTA"
+$WMIPool.Open()
+$WMIRunSpaces = @()
 #endregion
 
-#region что будет распараллелено - $PingPayload
+#region: Ping, WMI: скрипт-блоки для поточного выполнения
 $PingPayload = {Param ([string] $name = '127.0.0.1')
     for ($i = 0; $i -lt 3; $i++) {  # быстрее чем 'Test-Connection -Count 3'
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
@@ -96,9 +101,53 @@ $PingPayload = {Param ([string] $name = '127.0.0.1')
 
     Return (New-Object psobject -Property @{HostName = $name;Status = $ping;})
 }
+
+$WMIPayLoad = {Param ([string] $name = '127.0.0.1')
+    try {$Win32_DiskDrive = Get-WmiObject -ComputerName $name -class Win32_DiskDrive -ErrorAction Stop}
+    catch {$Win32_DiskDrive = @()}
+
+    foreach ($Disk in $Win32_DiskDrive) {
+        $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # в wql-запросе запрещены '\', поэтому заменим их на '_' (что означает "один любой символ"), см. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
+
+        # смарт-атрибуты, флаги
+        try {$WMIData = (Get-WmiObject -ComputerName $name -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific}
+        catch {$WMIData = @()}
+        if ($WMIData.Length -ne 512) {
+            Write-Host "`t", $Disk.Model, "- в WMI нет данных S.M.A.R.T." -ForegroundColor DarkYellow
+            continue
+        }  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
+
+        # пороговые значения
+        try {$WMIThresholds = (Get-WmiObject -ComputerName $name -namespace root\wmi -Class MSStorageDriver_FailurePredictThresholds -Filter $wql -ErrorAction Stop).VendorSpecific}
+        catch {$WMIThresholds = @()}
+
+        # статус диска (Windows OS IMHO)
+        try {$WMIStatus = (Get-WmiObject -ComputerName $name -namespace root\wmi –class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure}  # ИСТИНА (TRUE), если прогнозируется сбой диска. В этом случае нужно немедленно выполнить резервное копирование диска
+        catch {$WMIStatus = $null}
+
+        # добавляем новый диск в массив отчёта по дискам
+        Import-Module -Name ".\helper.psm1" -verbose
+        $DiskInfo = New-Object psobject -Property @{
+            ScanDate      =          Get-Date
+            HostName      = [string] $name
+            SerialNumber  = [string] $Disk.SerialNumber  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # не работает импорт ф-ии в скрипт-блоке
+            Model         = [string] $Disk.Model
+            Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
+            InterfaceType = [string] $Disk.InterfaceType
+            MediaType     = [string] $Disk.MediaType
+            DeviceID      = [string] $Disk.DeviceID
+            PNPDeviceID   = [string] $Disk.PNPDeviceID
+            WMIData       = [string] $WMIData
+            WMIThresholds = [string] $WMIThresholds
+            WMIStatus     = [boolean]$WMIStatus
+        }
+    }
+
+    Return $DiskInfo
+}
 #endregion
 
-#region создаём runspace`ы, запускаем и добавляем их в пул
+#region: Ping:      запускаем и добавляем потоки в пул
 foreach ($C in $Computers) {
     $PingNewShell = [PowerShell]::Create()
 
@@ -111,7 +160,7 @@ foreach ($C in $Computers) {
 }
 #endregion
 
-#region после завершения всех запущенных потоков собираем данные, закрываем потоки и пул
+#region: Ping:      после завершения потока собираем данные и закрываем, пул закрываем после завершения всех потоков
 if ($PingRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
     while ($PingRunSpaces.Status.IsCompleted -notcontains $true) {$t = ($PingRunSpaces.Status).Count <#общее кол-во потоков#>}  # после завершения хотя бы одного потока начинаем принимать данные
 
@@ -127,57 +176,36 @@ if ($PingRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в с
 }
 #endregion
 
-if ($ComputersOnLine.HostName -is [array]) {$t = $ComputersOnLine.HostName.Length} else {$t = 1}
-$p = 0  # прогресс-бар: $p - счётчик (текущий комп), $t - общее количество (всего компов к обработке)
+#region: WMI:       запускаем и добавляем потоки в пул
 foreach ($C in $ComputersOnLine | Where-Object {$_.Status -eq 'online'}) {
-    $p += 1
-    Write-Progress -id 2 -PercentComplete (100 * $p / $t) -Activity $Inp -Status "обрабатываю $p-й компьютер из $t" -CurrentOperation $C.HostName
+    $WMINewShell = [PowerShell]::Create()
 
-    Write-Host "`n$($C.HostName) $($C.Status)" -ForegroundColor Green
+    $null = $WMINewShell.AddScript($WMIPayload)
+    $null = $WMINewShell.AddArgument($C.HostName)
 
-    try {$Win32_DiskDrive = Get-WmiObject -ComputerName $C.HostName -class Win32_DiskDrive -ErrorAction Stop}
-    catch {$Win32_DiskDrive = @()}
+    $WMINewShell.RunspacePool = $WMIPool
 
-    foreach ($Disk in $Win32_DiskDrive) {
-        $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # в wql-запросе запрещены '\', поэтому заменим их на '_' (что означает "один любой символ"), см. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
-
-        # смарт-атрибуты, флаги
-        try {$WMIData = (Get-WmiObject -ComputerName $C.HostName -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific}
-        catch {$WMIData = @()}
-        if ($WMIData.Length -ne 512) {
-            Write-Host "`t", $Disk.Model, "- в WMI нет данных S.M.A.R.T." -ForegroundColor DarkYellow
-            continue
-        }  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
-
-        # пороговые значения
-        try {$WMIThresholds = (Get-WmiObject -ComputerName $C.HostName -namespace root\wmi -Class MSStorageDriver_FailurePredictThresholds -Filter $wql -ErrorAction Stop).VendorSpecific}
-        catch {$WMIThresholds = @()}
-
-        # статус диска (Windows OS IMHO)
-        try {$WMIStatus = (Get-WmiObject -ComputerName $C.HostName -namespace root\wmi –class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure}  # ИСТИНА (TRUE), если прогнозируется сбой диска. В этом случае нужно немедленно выполнить резервное копирование диска
-        catch {$WMIStatus = $null}
-
-        Write-Host "`t", $Disk.Model, $WMIStatus, $WMIData.Length, $WMIThresholds.Length -ForegroundColor Cyan
-
-        # добавляем новый диск в массив отчёта по дискам
-        $DiskInfo += (New-Object psobject -Property @{
-            ScanDate      =          $TimeStart
-            HostName      = [string] $C.HostName
-            SerialNumber  = Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  #.Trim()
-            Model         = [string] $Disk.Model
-            Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
-            InterfaceType = [string] $Disk.InterfaceType
-            MediaType     = [string] $Disk.MediaType
-            DeviceID      = [string] $Disk.DeviceID
-            PNPDeviceID   = [string] $Disk.PNPDeviceID
-            WMIData       = [string] $WMIData
-            WMIThresholds = [string] $WMIThresholds
-            WMIStatus     = [boolean]$WMIStatus
-        })
-    }
+    $WMIRunSpaces += [PSCustomObject]@{ Pipe = $WMINewShell; Status = $WMINewShell.BeginInvoke() }
 }
+#endregion
 
-# экспорт отчёта по дискам
+#region: WMI:       после завершения потока собираем данные и закрываем, пул закрываем после завершения всех потоков
+if ($WMIRunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
+    while ($WMIRunSpaces.Status.IsCompleted -notcontains $true) {$t = ($WMIRunSpaces.Status).Count <#общее кол-во потоков#>}  # после завершения хотя бы одного потока начинаем принимать данные
+
+    foreach ($RS in $WMIRunSpaces ) {
+        $p = ($WMIRunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+        Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "получение из WMI данных по жёстким дискам" -Status "всего: $t" -CurrentOperation "осталось: $p"
+
+        $DiskInfo += $RS.Pipe.EndInvoke($RS.Status)
+        $RS.Pipe.Dispose()
+    }
+    $WMIPool.Close()
+    $WMIPool.Dispose()
+}
+#endregion
+
+#region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
 $DiskInfo | Select-Object `
     'ScanDate',`
     'HostName',`
@@ -195,6 +223,7 @@ $DiskInfo | Select-Object `
 
 # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
 if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "Status" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
+#endregion
 
 # замер времени выполнения скрипта
 $ExecTime = [System.Math]::Round($( $(Get-Date) - $TimeStart ).TotalSeconds,1)
