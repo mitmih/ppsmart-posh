@@ -71,35 +71,65 @@ set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # лок
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
-#if ($Out -eq "") {$Out = ".\output\$('{0:yyyy-MM-dd_HH-mm}' -f $TimeStart)_drives.csv"}
-
 if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;Status = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
 
 if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
 
 if ($Computers.HostName -is [array]) {$t = $Computers.HostName.Length} else {$t = 1}
-$p = 0  # прогресс-бар: $p - счётчик (текущий комп), $t - общее количество (всего компов к обработке)
+
+# Multy-Threading: распараллелим проверку доступности компа по сети
+#region создаём пул runspace`ов
+$RSPool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS + 1) # +0=21s; +1,+2=14..16s;
+$RSPool.ApartmentState = "MTA"
+$RSPool.Open()
+$RunSpaces = @()
+$RSComputers = @()
+#endregion
+
+#region что будет распараллелено
+$RSPayload = {Param ([string] $name = '127.0.0.1')
+    for ($i = 0; $i -lt 3; $i++) {
+        $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
+        if ($ping) {break}
+    }
+
+    Return (New-Object psobject -Property @{HostName = $name;Status = if ($ping) {"online"} else {'offline'};})
+}
+#endregion
+
+#region создаём runspace`ы, запускаем и добавляем их в пул
+foreach ($C in $Computers) {
+
+    $RS = [PowerShell]::Create()
+
+    $null = $RS.AddScript($RSPayload)
+    $null = $RS.AddArgument($C.HostName)
+
+    $RS.RunspacePool = $RSPool
+
+    $RunSpaces += [PSCustomObject]@{ Pipe = $RS; Status = $RS.BeginInvoke() }
+}
+#endregion
+
+#region после завершения всех запущенных потоков собираем данные и закрываем потоки и пул
+while ($RunSpaces.Status.IsCompleted -notcontains $true) {}
+foreach ($RS in $RunSpaces ) {
+    $RSComputers += $RS.Pipe.EndInvoke($RS.Status)
+    $RS.Pipe.Dispose()
+}
+
+$RSPool.Close()
+$RSPool.Dispose()
+#endregion
 
 $DiskInfo = @()
-
-foreach ($C in $Computers) {
+$p = 0  # прогресс-бар: $p - счётчик (текущий комп), $t - общее количество (всего компов к обработке)
+foreach ($C in $RSComputers | Where-Object {$_.Status -eq 'online'}) {
     $p += 1
     Write-Progress -PercentComplete (100 * $p / $t) -Activity $Inp -Status "обрабатываю $p-й компьютер из $t" -CurrentOperation $C.HostName
 
-    $PingTest = $false  # оптимизированная проверка связи, если он-лайн, то переходим к получению данных, если оф-лайн - делаем ещё несколько пингов
-    for ($i = 0; $i -lt 3; $i++) {
-        $PingTest = (Test-Connection -Count 1 -ComputerName $C.HostName -Quiet)
-        if ($PingTest) {break}
-    }
+    Write-Host "`n$($C.HostName) $($C.Status)" -ForegroundColor Green
 
-    if (!$PingTest) {  # если хост офф-лайн: сообщим в консоль и перейдём к следующему хосту
-        $C.Status = "off-line"
-        Write-Host "$($C.HostName) off-line" -ForegroundColor Red
-        continue
-    }
-
-    $C.Status = "on-line"
-    Write-Host "$($C.HostName) on-line" -ForegroundColor Green
     try {$Win32_DiskDrive = Get-WmiObject -ComputerName $C.HostName -class Win32_DiskDrive -ErrorAction Stop}
     catch {$Win32_DiskDrive = @()}
 

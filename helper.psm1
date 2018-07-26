@@ -274,7 +274,7 @@ function Convert-hex2txt ([string] $wmisn) {
 
     функция проверяет формат серийного номера
     при необходимости конвертирует шестнадцатиричный серийный номер в текст, исправляя порядок символов
-    
+
     например: win7 format                        -> win10 format
         56394b4d37345130202020202020202020202020 -> 9VMK470Q
         32535841394a5a46354138333932202020202020 -> S2AXJ9FZA53829
@@ -285,7 +285,7 @@ function Convert-hex2txt ([string] $wmisn) {
     строка с серийным номером ЖД из WMI
 
 .OUTPUTS
-    нормализованная строка строка с серийным номером 
+    нормализованная строка строка с серийным номером
 
 .PARAMETER wmisn
     строка с серийным номером из WMI
@@ -307,7 +307,7 @@ function Convert-hex2txt ([string] $wmisn) {
         for ($i = 0; $i -lt 40; $i = $i + 4) {
             $txt = $txt + [CHAR][CONVERT]::toint16("$($wmisn[$i+2])$($wmisn[$i+3])",16) + [CHAR][CONVERT]::toint16("$($wmisn[$i+0])$($wmisn[$i+1])",16)
         }
-        
+
     } else {$txt = $wmisn}
 
     return $txt.Trim()
