@@ -48,7 +48,7 @@ $psCmdlet.ParameterSetName | Out-Null
 
 Clear-Host
 $TimeStart = @{0 = Get-Date}  # @(Get-Date) # замер времени выполнения скрипта
-set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # локальная корневая папка "./" = текущая директория скрипта
+Set-Location "$($MyInvocation.MyCommand.Definition | Split-Path -Parent)"  # локальная корневая папка "./" = текущая директория скрипта
 #endregion
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
@@ -77,14 +77,14 @@ foreach ($f in $WMIFiles) {
 #endregion
 
 #region  # поиск деградаций по 5-му атрибуту
-foreach ($g in $AllInfo | Group-Object -Property SerNo) {
-    $g_ex = $g | Select-Object -ExpandProperty group
+foreach ($g in $AllInfo | Sort-Object -Property PC,ScanDate | Group-Object -Property SerNo) {
+    $g_ex = $g | Select-Object -ExpandProperty Group
     $g_5 = $g_ex | Group-Object -Property '5'
 
-    # если группа по серийнику > группы по '5', это деградация по 'remap'
+    # если группа 'SerNo' > группы по '5', это деградация по 'remap'
     # if ($g.Count -gt 1) {"`v", $g, $g_5} # для наглядности можно включить вывод в консоль обеих групп
     if ($g.Count -eq $g_5.Count) {
-        $Stable += $g_ex
+        $Stable += $g_ex | Select-Object -Last 1
         # Write-Host ($g_ex | Select-Object -Property 'PC' -Unique).PC -ForegroundColor Green
         Continue
     }
@@ -94,10 +94,10 @@ foreach ($g in $AllInfo | Group-Object -Property SerNo) {
 }
 #endregion#>
 
-#region Reports  # $AllInfo | gm -MemberType NoteProperty
+#region  # отчёт Degradation
 $ReportDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
 if (Test-Path -Path $ReportDegradation) {Remove-Item -Path $ReportDegradation}
-$Degradation | Select-Object `
+$Degradation | Select-Object -Property `
     'PC',`
     'Model',`
     'SerNo',`
@@ -110,12 +110,15 @@ $Degradation | Select-Object `
     @{Expression = {$_.'200'};Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
 | Sort-Object -Property `
     @{Expression = "PC"; Descending = $false}, `
+    @{Expression = "5 Reallocated Sectors Count"; Descending = $false}, `
     @{Expression = "ScanDate"; Descending = $false} `
 | Export-Csv -NoTypeInformation -Path $ReportDegradation
+#endregion
 
+#region  # отчёт Stable
 $ReportStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
 if (Test-Path -Path $ReportStable) {Remove-Item -Path $ReportStable}
-$Stable | Select-Object `
+$Stable | Select-Object -Property `
     'PC',`
     'Model',`
     'SerNo',`

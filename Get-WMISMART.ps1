@@ -68,11 +68,14 @@ param
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
 $TimeStart = Get-Date # замер времени выполнения скрипта
-set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # локальная корневая папка "./" = текущая директория скрипта
+Set-Location "$($MyInvocation.MyCommand.Definition | Split-Path -Parent)"  # локальная корневая папка "./" = текущая директория скрипта
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
 if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;Status = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+
+$clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
+if ($clones -ne $null) {Write-Host "'$Inp' содержит повторяющиеся имена компьютеров, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
 
 if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
 
