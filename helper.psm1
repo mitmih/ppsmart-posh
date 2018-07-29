@@ -83,7 +83,7 @@ $dctSMART = @{
     999='testName'
 }  # словарь атрибутов
 
-function Convert-WMIArrays ([array] $data, [array] $thresh) {
+function Convert-WMIArrays ([string] $data, [string] $thresh) {
 <#
 .SYNOPSIS
     функция переводит сырые массивы S.M.A.R.T.-данных диска в более понятный формат
@@ -141,6 +141,8 @@ function Convert-WMIArrays ([array] $data, [array] $thresh) {
 #>
 
     $Result = @()
+    [int[]] $data = $data.Split(' ')
+    [int[]] $thresh = $thresh.Split(' ')
     if ($data.Length -eq 512 ) {
         for ($i = 2; $i -lt 512; $i = $i + 12) {  # работаем по массивам, каждая 12-байтовая группа отвечает за свой атрибут
             if ($data[$i] -eq 0 -or $thresh[$i] -eq 0) {continue}  # атрибуты с нулевым кодом нас не интересуют

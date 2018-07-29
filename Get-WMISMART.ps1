@@ -130,7 +130,7 @@ $WMIPayLoad = {Param ([string] $name = '127.0.0.1')
         $DiskInfo = New-Object psobject -Property @{
             ScanDate      =          Get-Date
             HostName      = [string] $name
-            SerialNumber  = [string] $Disk.SerialNumber  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # не работает импорт ф-ии в скрипт-блоке
+            SerialNumber  = [string] $Disk.SerialNumber.Trim()  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # не работает импорт модуля в скрипт-блоке
             Model         = [string] $Disk.Model
             Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
             InterfaceType = [string] $Disk.InterfaceType

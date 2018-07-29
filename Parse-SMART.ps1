@@ -2,15 +2,11 @@
 
 <#
 .SYNOPSIS
-    сценарий расшифровывает "сырые" S.M.A.R.T. данные из отчётов .\Get-WMISMART.ps1
+    расшифровывает отчёты .\Get-WMISMART.ps1
 
 .DESCRIPTION
-    для корректной работы сценария его необходимо запускать из-под УЗ администратора целевого компьютера
-
-    сценарий:
-        сканирует одиночный хост либо список машин
-        получает через WMI атрибуты S.M.A.R.T. жёстких дисков
-        сохраняет результат в .\output\yyyy-MM-dd_HH.csv
+    сценарий расшифровывает "сырые" S.M.A.R.T. данные из отчётов .\Get-WMISMART.ps1
+    по каждому отчёту формирует подробную расшифровку, сколько отчётов - столько расшифровок
 
 .INPUTS
     папка с отчётами по отсканированным жёстким дискам
@@ -62,7 +58,7 @@ foreach ($DrivesReportFile in $WMIFiles) {
     $Drives = Import-Csv "$DrivesReportFile"  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
     $AtrInfo = $null
     foreach ($disk in $Drives) {
-        $AtrInfo = Convert-WMIArrays -data ([int[]] $disk.WMIData.Split(' ')) -thresh ([int[]] $disk.WMIThresholds.Split(' '))
+        $AtrInfo = Convert-WMIArrays -data $disk.WMIData -thresh $disk.WMIThresholds
         $AtrInfo | Add-Member -MemberType NoteProperty -Name ScanDate  -Value $disk.ScanDate
         $AtrInfo | Add-Member -MemberType NoteProperty -Name PC        -Value $disk.HostName
         $AtrInfo | Add-Member -MemberType NoteProperty -Name Model     -Value $disk.Model
@@ -92,7 +88,7 @@ foreach ($DrivesReportFile in $WMIFiles) {
         'saFlagDec',`
         'saFlagBin',`
         'saFlagString'`
-        | Export-Csv -Append -NoTypeInformation -Path $DrivesReportFile.Replace('drives', '_smart')
+        | Export-Csv -Append -NoTypeInformation -Path $DrivesReportFile.Replace('drives', 'smart')
     }
     # Remove-Item -Path $DrivesReportFile  # удаляем прочитанный отчёт с "сырыми" данными
 }
