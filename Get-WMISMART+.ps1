@@ -20,6 +20,7 @@
         "HostName","Status"
         "MyHomePC",""
         "laptop",""
+    коэффициент - кол-во потоков, которые будут запущены на каждом логическом ядре
 
     в обязательном поле "HostName" указываются имена компьютеров
     поле "Status" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
@@ -32,6 +33,9 @@
 
 .PARAMETER Out
     путь к файлу отчёта
+
+.PARAMETER k
+    кол-во потоков на одно логическое ядро, опытным путём на i5 оптимально k=35: минимальное время без ошибок нехватки памяти
 
 .EXAMPLE
     .\Get-WMISMART.ps1 $env:COMPUTERNAME
@@ -62,8 +66,9 @@ param
 (
 #     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
     [string] $Inp = ".\input\hostname_list.csv",  # имя хоста либо путь к файлу списка хостов
-#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv"
-    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv"
+#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv",
+    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv",
+    [int] $k = 35
 )
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
@@ -84,7 +89,7 @@ $DiskInfo = @()
 
 # Multy-Threading: распараллелим проверку доступности компа по сети
 #region: инициализация пула
-$Pool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * 1 + 1)
+$Pool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * $k + 0)
 $Pool.ApartmentState = "MTA"
 $Pool.Open()
 $RunSpaces = @()
@@ -93,7 +98,7 @@ $RunSpaces = @()
 #region: скрипт-блок задания, которое будет выполняться в потоке
 $Payload = {Param ([string] $name = '127.0.0.1')
 
-    for ($i = 0; $i -lt 3; $i++) {  # быстрее чем 'Test-Connection -Count 3'
+    for ($i = 0; $i -lt 2; $i++) {  # быстрее чем 'Test-Connection -Count 3'
         $WMIInfo = @()
         $ping = $false
 

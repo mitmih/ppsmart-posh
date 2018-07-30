@@ -90,7 +90,10 @@ foreach ($g in $AllInfo | Sort-Object -Property PC,ScanDate | Group-Object -Prop
     }
 
     Write-Host ($g_ex | Select-Object -Property 'PC' -Unique).PC -ForegroundColor Magenta
-    $Degradation += $g_ex
+#     $Degradation += $g_ex
+    foreach ($r in $g_5) {
+        $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1)
+    }
 }
 #endregion#>
 
@@ -102,6 +105,7 @@ $Degradation | Select-Object -Property `
     'Model',`
     'SerNo',`
     'ScanDate',`
+    @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
     @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
     @{Expression = {$_.'184'};Name='184 End-to-End error / IOEDC'},`
     @{Expression = {$_.'187'};Name='187 Reported Uncorrectable Errors'},`
@@ -123,6 +127,7 @@ $Stable | Select-Object -Property `
     'Model',`
     'SerNo',`
     'ScanDate',`
+    @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
     @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
     @{Expression = {$_.'184'};Name='184 End-to-End error / IOEDC'},`
     @{Expression = {$_.'187'};Name='187 Reported Uncorrectable Errors'},`
