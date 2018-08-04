@@ -178,7 +178,7 @@ if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случа
 
         $Result = $RS.Pipe.EndInvoke($RS.Status)
         $ComputersOnLine += $Result[0]
-        $DiskInfo += $Result[1]
+        if ($Result[1].Count -gt 0) {$DiskInfo += $Result[1]}
         $RS.Pipe.Dispose()
     }
     $Pool.Close()
@@ -187,6 +187,7 @@ if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случа
 #endregion
 
 #region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
+foreach($d in $DiskInfo){$d.SerialNumber  = (Convert-hex2txt -wmisn $d.SerialNumber)}
 $DiskInfo | Select-Object `
     'ScanDate',`
     'HostName',`
