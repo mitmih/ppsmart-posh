@@ -37,29 +37,87 @@
     Author: Dmitry Mikhaylov
 #>
 
-#region  # НАЧАЛО
 [CmdletBinding(DefaultParameterSetName="all")]
-
 param
 (
      [string] $ReportDir = '.\output'  #
 )
-$psCmdlet.ParameterSetName | Out-Null
 
+#region  # НАЧАЛО
+$psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = @{0 = Get-Date}  # @(Get-Date) # замер времени выполнения скрипта
-Set-Location "$($MyInvocation.MyCommand.Definition | Split-Path -Parent)"  # локальная корневая папка "./" = текущая директория скрипта
+$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+$RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
+Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
 #endregion
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
-$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv'  # отчёты по дискам
+$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # отчёты по дискам
 $AllInfo = @()  # полная инфа по всем дискам из всех отчётов
 $Degradation = @()  # деградация по 5-му атрибуту (remap)
 $Stable = @()  # стабильные, без деградации по 5-му атрибуту (remap)
 
-#region  # читаем WMI-отчёты
-foreach ($f in $WMIFiles) {
+#region читаем WMI-отчёты из БД
+# проверяем битность среды выполнения для подключения подходящей библиотеки
+if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
+elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
+else {Write-Host 'Hmmm... not 32 or 64 bit...'}
+
+# подключаем библиотеку для работы с sqlite
+try {Add-Type -Path $sqlite -ErrorAction Stop}
+catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
+
+$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
+
+# открываем соединение с БД
+$con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+$con.ConnectionString = "Data Source=$db"
+$con.Open()
+
+# запрашиваем результаты сканов
+$sql = $con.CreateCommand()
+$sql.CommandText = @"
+SELECT
+	Host.HostName,
+	Disk.Model,
+	Disk.SerialNumber,
+	Disk.Size,
+	Scan.ScanDate,
+	Scan.WMIData,
+	Scan.WMIThresholds,
+	Scan.WMIStatus
+FROM `Scan`
+INNER JOIN `Host` ON Scan.HostID = Host.ID
+INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
+ORDER BY Scan.ID;
+"@
+$adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
+$data = New-Object System.Data.DataSet
+[void]$adapter.Fill($data)
+$sql.Dispose()
+$con.Close()
+
+Measure-Command {###########################################
+    # обрабатываем результаты сканов $data.Tables.Rows.Count
+    foreach ($hd in $data.Tables.Rows) {
+        $Disk = (New-Object PSObject -Property @{
+            ScanDate = $hd.ScanDate
+            PC       = $hd.HostName
+            Model    = $hd.Model
+            SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
+            })
+        foreach ($atr in Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
+            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
+            catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}
+        }
+        $AllInfo += $Disk
+    }
+} | select -ExpandProperty TotalSeconds ###########################################
+#endregion
+
+#region  # читаем WMI-отчёты из файлов
+<#foreach ($f in $WMIFiles) {
     foreach ($HardDrive in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
         $Disk = (New-Object PSObject -Property @{
             ScanDate = $HardDrive.ScanDate
@@ -73,7 +131,7 @@ foreach ($f in $WMIFiles) {
         }
         $AllInfo += $Disk
     }
-}
+}#>
 #endregion
 
 #region  # поиск деградаций по 5-му атрибуту
@@ -146,7 +204,15 @@ $Stable | Select-Object -Property `
 
 #region  # КОНЕЦ
 # замер времени выполнения скрипта
-$TimeStart[-1] = Get-Date
+$TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
 #endregion
+
+
+<#
+
+
+Replace(' ATA Device', '')
+Replace(' SCSI Disk Device', '')
+#>

@@ -70,10 +70,14 @@ param
     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv",
     [int] $k = 35
 )
+
+#region  # НАЧАЛО
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = Get-Date # замер времени выполнения скрипта
-Set-Location "$($MyInvocation.MyCommand.Definition | Split-Path -Parent)"  # локальная корневая папка "./" = текущая директория скрипта
+$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+$RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
+Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+#endregion
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
@@ -150,8 +154,6 @@ $Payload = {Param ([string] $name = '127.0.0.1')
 
     Return @((New-Object psobject -Property @{HostName = $name;Status = $ping;}), $WMIInfo)
 }
-
-<#$WMIPayLoad = {}#>
 #endregion
 
 #region: запускаем задание и добавляем потоки в пул
@@ -167,14 +169,14 @@ foreach ($C in $Computers) {
 }
 #endregion
 
-#region: после завершения каждого потока собираем его данные и закрываем, а пул закрываем после завершения всех потоков
+#region: после завершения каждого потока собираем его данные и закрываем, а после завершения всех потоков закрываем пул
 if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
     while ($RunSpaces.Status.IsCompleted -notcontains $true) {}  # ждём завершения хотя бы одного потока начинаем принимать данные
 
     $t = ($RunSpaces.Status).Count  # общее кол-во потоков
     foreach ($RS in $RunSpaces ) {
         $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
-        Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера" -Status "всего: $t" -CurrentOperation "осталось: $p"
+        Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера и сбор S.M.A.R.T. данных" -Status "всего: $t" -CurrentOperation "осталось: $p"
 
         $Result = $RS.Pipe.EndInvoke($RS.Status)
         $ComputersOnLine += $Result[0]
@@ -186,8 +188,137 @@ if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случа
 }
 #endregion
 
+#region: обновление БД
+foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
+
+# проверяем битность среды выполнения для подключения подходящей библиотеки
+if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
+elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
+else {Write-Host 'Hmmm... not 32 or 64 bit...'}
+
+# подключаем библиотеку для работы с sqlite
+try {Add-Type -Path $sqlite -ErrorAction Stop}
+catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
+
+$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
+
+# открываем соединение с БД
+$con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+$con.ConnectionString = "Data Source=$db"
+$con.Open()
+
+# из БД получаем ID и серийники дисков
+$sqlDisk = $con.CreateCommand()
+$sqlDisk.CommandText = "SELECT Disk.ID, Disk.SerialNumber FROM Disk;"
+$adapterDisk = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sqlDisk
+$dataDisk = New-Object System.Data.DataSet
+[void]$adapterDisk.Fill($dataDisk)
+$sqlDisk.Dispose()
+
+# из БД получаем ID и имена хостов
+$sqlHost = $con.CreateCommand()
+$sqlHost.CommandText = "SELECT Host.ID, Host.HostName FROM Host;"
+$adapterHost = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sqlHost
+$dataHost = New-Object System.Data.DataSet
+[void]$adapterHost.Fill($dataHost)
+$sqlHost.Dispose()
+
+# добавим в словари диски и хосты, чтобы быстро извлекать их ИД
+$dctDisk = @{}
+$dctHost = @{}
+foreach ($r in $dataDisk.Tables.Rows) {$dctDisk[$r.SerialNumber] = $r.ID}
+foreach ($r in $dataHost.Tables.Rows) {$dctHost[$r.HostName] = $r.ID}
+
+foreach ($d in $DiskInfo) {
+# 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
+
+<#
+    $d.SerialNumber = "b1"
+    $d.HostName     = "b1"
+
+    $d.SerialNumber = "b2"
+    $d.HostName     = "b2"
+
+    $d.SerialNumber = "b3"
+    $d.HostName     = "b3"
+#>
+    # если диска нет в БД - вносим и запоминаем ID
+    if (!($dctDisk.ContainsKey($d.SerialNumber))) {
+	    #region Disk
+	    $sqlDisk = $con.CreateCommand()
+	    $sqlDisk.CommandText = @"
+		    INSERT OR IGNORE INTO `Disk` (
+			    `SerialNumber`,
+			    `Model`,
+			    `Size`,
+			    `InterfaceType`,
+			    `MediaType`,
+			    `DeviceID`,
+			    `PNPDeviceID`
+		    ) VALUES (
+			    @SerialNumber,
+			    @Model,
+			    @Size,
+			    @InterfaceType,
+			    @MediaType,
+			    @DeviceID,
+			    @PNPDeviceID
+		    );
+"@
+	    $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $d.SerialNumber)
+	    $null = $sqlDisk.Parameters.AddWithValue("@Model", $d.Model)
+	    $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $d.Size)
+	    $null = $sqlDisk.Parameters.AddWithValue("@InterfaceType", $d.InterfaceType)
+	    $null = $sqlDisk.Parameters.AddWithValue("@MediaType", $d.MediaType)
+	    $null = $sqlDisk.Parameters.AddWithValue("@DeviceID", $d.DeviceID)
+	    $null = $sqlDisk.Parameters.AddWithValue("@PNPDeviceID", $d.PNPDeviceID)
+
+	    if ($sqlDisk.ExecuteNonQuery()) {$dctDisk[$d.SerialNumber] = $sqlDisk.Connection.LastInsertRowId}
+	    $sqlDisk.Dispose()  #endregion
+    }
+
+    # если хоста нет в БД - вносим и запоминаем ID
+    if (!($dctHost.ContainsKey($d.HostName))) {
+		    #region Host
+		    $sqlHost = $con.CreateCommand()
+		    $sqlHost.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);"
+		    $null = $sqlHost.Parameters.AddWithValue("@HostName", $d.HostName)
+		    if ($sqlHost.ExecuteNonQuery()) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
+		    $sqlHost.Dispose()  #endregion
+    }
+
+	#region Scan
+	$sqlScan = $con.CreateCommand()
+	$sqlScan.CommandText = @"
+		INSERT OR IGNORE INTO `Scan` (
+			`DiskID`,
+			`HostID`,
+			`ScanDate`,
+			`WMIData`,
+			`WMIThresholds`,
+			`WMIStatus`
+		) VALUES (
+			@DiskID,
+			@HostID,
+			@ScanDate,
+			@WMIData,
+			@WMIThresholds,
+			@WMIStatus
+		);
+"@
+	$null = $sqlScan.Parameters.AddWithValue("@DiskID", $dctDisk[$d.SerialNumber])
+	$null = $sqlScan.Parameters.AddWithValue("@HostID", $dctHost[$d.HostName])
+	$null = $sqlScan.Parameters.AddWithValue("@ScanDate", $d.ScanDate)
+	$null = $sqlScan.Parameters.AddWithValue("@WMIData", $d.WMIData)
+	$null = $sqlScan.Parameters.AddWithValue("@WMIThresholds", $d.WMIThresholds)
+	$null = $sqlScan.Parameters.AddWithValue("@WMIStatus", $d.WMIStatus)
+	$null = $sqlScan.ExecuteNonQuery()  #) {}  # 1 если запись успешно добавлена, 0 если была ошибка
+	$sqlScan.Dispose()  #endregion
+}
+$con.Close()
+#endregion
+
 #region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
-foreach($d in $DiskInfo){$d.SerialNumber  = (Convert-hex2txt -wmisn $d.SerialNumber)}
 $DiskInfo | Select-Object `
     'ScanDate',`
     'HostName',`
@@ -207,6 +338,9 @@ $DiskInfo | Select-Object `
 if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "Status" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
 #endregion
 
+#region  # КОНЕЦ
 # замер времени выполнения скрипта
-$ExecTime = [System.Math]::Round($( $(Get-Date) - $TimeStart ).TotalSeconds,1)
+$TimeStart += Get-Date
+$ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
+#endregion
