@@ -5,7 +5,8 @@
 ppsmart-posh.db
 
 # folders
-3rd_party_docs/
-examples_of_bad_drives/
+*additional materials*/
 input/
 output/
+x32/
+x64/

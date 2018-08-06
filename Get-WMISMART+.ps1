@@ -10,20 +10,20 @@
     сценарий:
         сканирует одиночный хост либо список машин
         получает через WMI доступные S.M.A.R.T.-данные жёстких дисков
-        сохраняет отчёт в .\output\yyyy-MM-dd_HH-mm-ss.csv
+        сохраняет отчёт в '.\output\yyyy-MM-dd_HH-mm $inp drives.csv'
 
 .INPUTS
     имя компьютера в формате "mylaptop"
         или
     csv-файл списка компьютеров
     ожидаемый формат файла, первая строка содержит заголовки
-        "HostName","Status"
+        "HostName","LastScan"
         "MyHomePC",""
         "laptop",""
     коэффициент - кол-во потоков, которые будут запущены на каждом логическом ядре
 
     в обязательном поле "HostName" указываются имена компьютеров
-    поле "Status" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
+    поле "LastScan" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
 
 .OUTPUTS
     csv-файл с "сырыми" S.M.A.R.T.-данными
@@ -46,7 +46,7 @@
         получить S.M.A.R.T. атрибуты компьютера HOST_NAME
 
 .EXAMPLE
-    .\Get-WMISMART.ps1 .\input\hostname_list.csv
+    .\Get-WMISMART.ps1 .\input\example.csv
         получить S.M.A.R.T. атрибуты дисков компьютеров из списка hostname_list.csv
 
 .LINK
@@ -65,10 +65,9 @@
 param
 (
 #     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    [string] $Inp = ".\input\hostname_list.csv",  # имя хоста либо путь к файлу списка хостов
-#     [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH}' -f $(Get-Date))_drives.csv",
-    [string] $Out = ".\output\$($Inp.ToString().Split('\')[-1].Replace('.csv', '')) $('{0:yyyy-MM-dd_HH-mm-ss}' -f $(Get-Date))_drives.csv",
-    [int] $k = 35
+    [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
+    [string] $Out = ".\output\$('{0:yyyy-MM-dd_HH-mm}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
+    [int]    $k   = 35
 )
 
 #region  # НАЧАЛО
@@ -81,7 +80,7 @@ Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скри
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
-if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;Status = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;LastScan = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
 
 $clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
 if ($clones -ne $null) {Write-Host "'$Inp' содержит повторяющиеся имена компьютеров, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
@@ -91,7 +90,7 @@ if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
 $ComputersOnLine = @()
 $DiskInfo = @()
 
-# Multy-Threading: распараллелим проверку доступности компа по сети
+#region Multi-Threading: распараллелим проверку доступности компа по сети
 #region: инициализация пула
 $Pool = [RunspaceFactory]::CreateRunspacePool(1, [int] $env:NUMBER_OF_PROCESSORS * $k + 0)
 $Pool.ApartmentState = "MTA"
@@ -152,7 +151,7 @@ $Payload = {Param ([string] $name = '127.0.0.1')
         }
     }
 
-    Return @((New-Object psobject -Property @{HostName = $name;Status = $ping;}), $WMIInfo)
+    Return @((New-Object psobject -Property @{HostName = $name;LastScan = [string] (Get-Date);}), $WMIInfo)
 }
 #endregion
 
@@ -187,6 +186,7 @@ if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случа
     $Pool.Dispose()
 }
 #endregion
+#endregion Multi-Threading
 
 #region: обновление БД
 foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
@@ -233,74 +233,87 @@ foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Siz
 
     #region Disk # если диска нет в БД - вносим и запоминаем ID
     if (!($dctDisk.ContainsKey($d.SerialNumber))) {
-	    $sqlDisk = $con.CreateCommand()
-	    $sqlDisk.CommandText = @"
-		    INSERT OR IGNORE INTO `Disk` (
-			    `SerialNumber`,
-			    `Model`,
-			    `Size`,
-			    `InterfaceType`,
-			    `MediaType`,
-			    `DeviceID`,
-			    `PNPDeviceID`
-		    ) VALUES (
-			    @SerialNumber,
-			    @Model,
-			    @Size,
-			    @InterfaceType,
-			    @MediaType,
-			    @DeviceID,
-			    @PNPDeviceID
-		    );
+        $sqlDisk = $con.CreateCommand()
+        $sqlDisk.CommandText = @"
+            INSERT OR IGNORE INTO `Disk` (
+                `SerialNumber`,
+                `Model`,
+                `Size`,
+                `InterfaceType`,
+                `MediaType`,
+                `DeviceID`,
+                `PNPDeviceID`
+            ) VALUES (
+                @SerialNumber,
+                @Model,
+                @Size,
+                @InterfaceType,
+                @MediaType,
+                @DeviceID,
+                @PNPDeviceID
+            );
 "@
-	    $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $d.SerialNumber)
-	    $null = $sqlDisk.Parameters.AddWithValue("@Model", $d.Model)
-	    $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $d.Size)
-	    $null = $sqlDisk.Parameters.AddWithValue("@InterfaceType", $d.InterfaceType)
-	    $null = $sqlDisk.Parameters.AddWithValue("@MediaType", $d.MediaType)
-	    $null = $sqlDisk.Parameters.AddWithValue("@DeviceID", $d.DeviceID)
-	    $null = $sqlDisk.Parameters.AddWithValue("@PNPDeviceID", $d.PNPDeviceID)
+        $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $d.SerialNumber)
+        $null = $sqlDisk.Parameters.AddWithValue("@Model", $d.Model)
+        $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $d.Size)
+        $null = $sqlDisk.Parameters.AddWithValue("@InterfaceType", $d.InterfaceType)
+        $null = $sqlDisk.Parameters.AddWithValue("@MediaType", $d.MediaType)
+        $null = $sqlDisk.Parameters.AddWithValue("@DeviceID", $d.DeviceID)
+        $null = $sqlDisk.Parameters.AddWithValue("@PNPDeviceID", $d.PNPDeviceID)
 
-	    if ($sqlDisk.ExecuteNonQuery()) {$dctDisk[$d.SerialNumber] = $sqlDisk.Connection.LastInsertRowId}
-	    $sqlDisk.Dispose()
+        if ($sqlDisk.ExecuteNonQuery()) {$dctDisk[$d.SerialNumber] = $sqlDisk.Connection.LastInsertRowId}
+        $sqlDisk.Dispose()
     }  #endregion
 
     #region Host # если хоста нет в БД - вносим и запоминаем ID
-    if (!($dctHost.ContainsKey($d.HostName))) {
-		    $sqlHost = $con.CreateCommand()
-		    $sqlHost.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);"
-		    $null = $sqlHost.Parameters.AddWithValue("@HostName", $d.HostName)
-		    if ($sqlHost.ExecuteNonQuery()) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
-		    $sqlHost.Dispose()
-    }  #endregion
+    if (!($dctHost.ContainsKey($d.HostName)))
+    {
+        $sqlHost = $con.CreateCommand()
+        $sqlHost.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`,`LastScan`) VALUES (@HostName, @LastScan);"
+        $null = $sqlHost.Parameters.AddWithValue("@HostName", $d.HostName)
+        $null = $sqlHost.Parameters.AddWithValue("@LastScan", (Get-Date))
+        if ($sqlHost.ExecuteNonQuery()) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
+        $sqlHost.Dispose()
+    }
+    else
+    {
+        # если хост в БД, нужно обновить его статус
+        $sqlHost = $con.CreateCommand()
+        $sqlHost.CommandText = 'UPDATE `Host` SET LastScan = @LastScan WHERE ID = @ID'
+        $null = $sqlHost.Parameters.AddWithValue("@LastScan", (Get-Date))
+        $null = $sqlHost.Parameters.AddWithValue("@ID", $dctHost[$d.HostName])
+        $null = $sqlHost.ExecuteNonQuery() #) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
+        $sqlHost.Dispose()
+    }
+    #endregion
 
-	#region Scan
-	$sqlScan = $con.CreateCommand()
-	$sqlScan.CommandText = @"
-		INSERT OR IGNORE INTO `Scan` (
-			`DiskID`,
-			`HostID`,
-			`ScanDate`,
-			`WMIData`,
-			`WMIThresholds`,
-			`WMIStatus`
-		) VALUES (
-			@DiskID,
-			@HostID,
-			@ScanDate,
-			@WMIData,
-			@WMIThresholds,
-			@WMIStatus
-		);
+    #region Scan
+    $sqlScan = $con.CreateCommand()
+    $sqlScan.CommandText = @"
+        INSERT OR IGNORE INTO `Scan` (
+            `DiskID`,
+            `HostID`,
+            `ScanDate`,
+            `WMIData`,
+            `WMIThresholds`,
+            `WMIStatus`
+        ) VALUES (
+            @DiskID,
+            @HostID,
+            @ScanDate,
+            @WMIData,
+            @WMIThresholds,
+            @WMIStatus
+        );
 "@
-	$null = $sqlScan.Parameters.AddWithValue("@DiskID", $dctDisk[$d.SerialNumber])
-	$null = $sqlScan.Parameters.AddWithValue("@HostID", $dctHost[$d.HostName])
-	$null = $sqlScan.Parameters.AddWithValue("@ScanDate", $d.ScanDate)
-	$null = $sqlScan.Parameters.AddWithValue("@WMIData", $d.WMIData)
-	$null = $sqlScan.Parameters.AddWithValue("@WMIThresholds", $d.WMIThresholds)
-	$null = $sqlScan.Parameters.AddWithValue("@WMIStatus", $d.WMIStatus)
-	$null = $sqlScan.ExecuteNonQuery()  #) {}  # 1 если запись успешно добавлена, 0 если была ошибка
-	$sqlScan.Dispose()  #endregion
+    $null = $sqlScan.Parameters.AddWithValue("@DiskID", $dctDisk[$d.SerialNumber])
+    $null = $sqlScan.Parameters.AddWithValue("@HostID", $dctHost[$d.HostName])
+    $null = $sqlScan.Parameters.AddWithValue("@ScanDate", $d.ScanDate)
+    $null = $sqlScan.Parameters.AddWithValue("@WMIData", $d.WMIData)
+    $null = $sqlScan.Parameters.AddWithValue("@WMIThresholds", $d.WMIThresholds)
+    $null = $sqlScan.Parameters.AddWithValue("@WMIStatus", $d.WMIStatus)
+    $null = $sqlScan.ExecuteNonQuery()  #) {}  # 1 если запись успешно добавлена, 0 если была ошибка
+    $sqlScan.Dispose()  #endregion
 }
 $con.Close()
 #endregion
@@ -322,7 +335,7 @@ $DiskInfo | Select-Object `
     | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
 
 # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
-if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "Status" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
+if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "LastScan" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
 #endregion
 
 #region  # КОНЕЦ
@@ -331,3 +344,10 @@ $TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
 #endregion
+
+<#
+UPDATE `Host`
+SET LastScan = "1"
+WHERE
+    Host.HostName = "qwe"
+#>
