@@ -229,22 +229,10 @@ $dctHost = @{}
 foreach ($r in $dataDisk.Tables.Rows) {$dctDisk[$r.SerialNumber] = $r.ID}
 foreach ($r in $dataHost.Tables.Rows) {$dctHost[$r.HostName] = $r.ID}
 
-foreach ($d in $DiskInfo) {
-# 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
+foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
 
-<#
-    $d.SerialNumber = "b1"
-    $d.HostName     = "b1"
-
-    $d.SerialNumber = "b2"
-    $d.HostName     = "b2"
-
-    $d.SerialNumber = "b3"
-    $d.HostName     = "b3"
-#>
-    # если диска нет в БД - вносим и запоминаем ID
+    #region Disk # если диска нет в БД - вносим и запоминаем ID
     if (!($dctDisk.ContainsKey($d.SerialNumber))) {
-	    #region Disk
 	    $sqlDisk = $con.CreateCommand()
 	    $sqlDisk.CommandText = @"
 		    INSERT OR IGNORE INTO `Disk` (
@@ -274,18 +262,17 @@ foreach ($d in $DiskInfo) {
 	    $null = $sqlDisk.Parameters.AddWithValue("@PNPDeviceID", $d.PNPDeviceID)
 
 	    if ($sqlDisk.ExecuteNonQuery()) {$dctDisk[$d.SerialNumber] = $sqlDisk.Connection.LastInsertRowId}
-	    $sqlDisk.Dispose()  #endregion
-    }
+	    $sqlDisk.Dispose()
+    }  #endregion
 
-    # если хоста нет в БД - вносим и запоминаем ID
+    #region Host # если хоста нет в БД - вносим и запоминаем ID
     if (!($dctHost.ContainsKey($d.HostName))) {
-		    #region Host
 		    $sqlHost = $con.CreateCommand()
 		    $sqlHost.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);"
 		    $null = $sqlHost.Parameters.AddWithValue("@HostName", $d.HostName)
 		    if ($sqlHost.ExecuteNonQuery()) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
-		    $sqlHost.Dispose()  #endregion
-    }
+		    $sqlHost.Dispose()
+    }  #endregion
 
 	#region Scan
 	$sqlScan = $con.CreateCommand()

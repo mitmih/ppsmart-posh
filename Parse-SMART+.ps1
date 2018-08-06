@@ -58,7 +58,7 @@ $AllInfo = @()  # полная инфа по всем дискам из всех отчётов
 $Degradation = @()  # деградация по 5-му атрибуту (remap)
 $Stable = @()  # стабильные, без деградации по 5-му атрибуту (remap)
 
-#region читаем WMI-отчёты из БД
+#region  # читаем WMI-отчёты из БД
 # проверяем битность среды выполнения для подключения подходящей библиотеки
 if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
 elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
@@ -99,20 +99,21 @@ $sql.Dispose()
 $con.Close()
 
 Measure-Command {###########################################
-    # обрабатываем результаты сканов $data.Tables.Rows.Count
-    foreach ($hd in $data.Tables.Rows) {
-        $Disk = (New-Object PSObject -Property @{
-            ScanDate = $hd.ScanDate
-            PC       = $hd.HostName
-            Model    = $hd.Model
-            SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
-            })
-        foreach ($atr in Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
-            catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}
-        }
-        $AllInfo += $Disk
+# обрабатываем результаты сканов $data.Tables.Rows.Count
+foreach ($hd in $data.Tables.Rows) {
+    $Disk = (New-Object PSObject -Property @{
+        ScanDate = $hd.ScanDate
+        PC       = $hd.HostName
+        Model    = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
+        SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
+        })
+            
+    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)})) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
+        try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
+        catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}
     }
+    $AllInfo += $Disk
+}
 } | select -ExpandProperty TotalSeconds ###########################################
 #endregion
 
@@ -208,11 +209,3 @@ $TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
 #endregion
-
-
-<#
-
-
-Replace(' ATA Device', '')
-Replace(' SCSI Disk Device', '')
-#>
