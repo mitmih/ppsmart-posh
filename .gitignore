@@ -2,6 +2,7 @@
 *.csv
 .bak
 .TODO
+ppsmart-posh.db
 
 # folders
 3rd_party_docs/
