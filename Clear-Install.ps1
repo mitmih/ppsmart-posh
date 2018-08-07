@@ -84,7 +84,7 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
 
         if(!(Test-Path $file))
         {  #download
-            (New-Object System.Net.WebClient).DownloadFile($links[$k], $links[$k].Split('/')[-1])
+            (New-Object System.Net.WebClient).DownloadFile($links[$k], $file)
             #Start-BitsTransfer -Source $links[$k] -Destination $links[$k].Split('/')[-1] #-Asynchronous
         }
         #endregion
@@ -119,18 +119,19 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
             Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
         }
         #endregion
-
     }
 
 #endregion
 
 #region init ppsmart-posh.db
-    if ([IntPtr]::Size -eq 8)
-    {  # 64-bit
+    if ([IntPtr]::Size -eq 8)  # 64-bit
+    {
+        Write-Host "64-bit" -ForeGround Cyan
         $sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'
     }
-    elseif ([IntPtr]::Size -eq 4)
-    {  # 32-bit
+    elseif ([IntPtr]::Size -eq 4)  # 32-bit
+    {
+        Write-Host "32-bit" -ForeGround Cyan
         $sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'
     }
     else {Write-Host 'can not choose between 32 or 64 bit dll`s'}
