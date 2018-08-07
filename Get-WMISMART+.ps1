@@ -191,131 +191,33 @@ if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случа
 #region: обновление БД
 foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
 
-# проверяем битность среды выполнения для подключения подходящей библиотеки
-if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
-elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
-else {Write-Host 'Hmmm... not 32 or 64 bit...'}
+$DiskID = Get-DBHashTable -table 'Disk'
+$HostID = Get-DBHashTable -table 'Host'
+foreach ($Scan in $DiskInfo)
+{  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
 
-# подключаем библиотеку для работы с sqlite
-try {Add-Type -Path $sqlite -ErrorAction Stop}
-catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
-
-$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
-
-# открываем соединение с БД
-$con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-$con.ConnectionString = "Data Source=$db"
-$con.Open()
-
-# из БД получаем ID и серийники дисков
-$sqlDisk = $con.CreateCommand()
-$sqlDisk.CommandText = "SELECT Disk.ID, Disk.SerialNumber FROM Disk;"
-$adapterDisk = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sqlDisk
-$dataDisk = New-Object System.Data.DataSet
-[void]$adapterDisk.Fill($dataDisk)
-$sqlDisk.Dispose()
-
-# из БД получаем ID и имена хостов
-$sqlHost = $con.CreateCommand()
-$sqlHost.CommandText = "SELECT Host.ID, Host.HostName FROM Host;"
-$adapterHost = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sqlHost
-$dataHost = New-Object System.Data.DataSet
-[void]$adapterHost.Fill($dataHost)
-$sqlHost.Dispose()
-
-# добавим в словари диски и хосты, чтобы быстро извлекать их ИД
-$dctDisk = @{}
-$dctHost = @{}
-foreach ($r in $dataDisk.Tables.Rows) {$dctDisk[$r.SerialNumber] = $r.ID}
-foreach ($r in $dataHost.Tables.Rows) {$dctHost[$r.HostName] = $r.ID}
-
-foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
-
-    #region Disk # если диска нет в БД - вносим и запоминаем ID
-    if (!($dctDisk.ContainsKey($d.SerialNumber))) {
-        $sqlDisk = $con.CreateCommand()
-        $sqlDisk.CommandText = @'
-            INSERT OR IGNORE INTO `Disk` (
-                `SerialNumber`,
-                `Model`,
-                `Size`,
-                `InterfaceType`,
-                `MediaType`,
-                `DeviceID`,
-                `PNPDeviceID`
-            ) VALUES (
-                @SerialNumber,
-                @Model,
-                @Size,
-                @InterfaceType,
-                @MediaType,
-                @DeviceID,
-                @PNPDeviceID
-            );
-'@
-        $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $d.SerialNumber)
-        $null = $sqlDisk.Parameters.AddWithValue("@Model", $d.Model)
-        $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $d.Size)
-        $null = $sqlDisk.Parameters.AddWithValue("@InterfaceType", $d.InterfaceType)
-        $null = $sqlDisk.Parameters.AddWithValue("@MediaType", $d.MediaType)
-        $null = $sqlDisk.Parameters.AddWithValue("@DeviceID", $d.DeviceID)
-        $null = $sqlDisk.Parameters.AddWithValue("@PNPDeviceID", $d.PNPDeviceID)
-
-        if ($sqlDisk.ExecuteNonQuery()) {$dctDisk[$d.SerialNumber] = $sqlDisk.Connection.LastInsertRowId}
-        $sqlDisk.Dispose()
-    }  #endregion
-
-    #region Host # если хоста нет в БД - вносим и запоминаем ID
-    if (!($dctHost.ContainsKey($d.HostName)))
+    # Disk
+    if (!$DiskID.ContainsKey($Scan.SerialNumber))
     {
-        $sqlHost = $con.CreateCommand()
-        $sqlHost.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`,`LastScan`) VALUES (@HostName, @LastScan);"
-        $null = $sqlHost.Parameters.AddWithValue("@HostName", $d.HostName)
-        $null = $sqlHost.Parameters.AddWithValue("@LastScan", (Get-Date))
-        if ($sqlHost.ExecuteNonQuery()) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
-        $sqlHost.Dispose()
+        $dID = Add-DBDisk -obj $Scan
+        if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
+    }
+
+    # Host
+    if ($HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
+    {  # update record
+        $hID = Add-DBHost -obj $Scan -id $HostID[$Scan.HostName]
     }
     else
-    {
-        # если хост в БД, нужно обновить его статус
-        $sqlHost = $con.CreateCommand()
-        $sqlHost.CommandText = 'UPDATE `Host` SET LastScan = @LastScan WHERE ID = @ID'
-        $null = $sqlHost.Parameters.AddWithValue("@LastScan", (Get-Date))
-        $null = $sqlHost.Parameters.AddWithValue("@ID", $dctHost[$d.HostName])
-        $null = $sqlHost.ExecuteNonQuery() #) {$dctHost[$d.HostName] = $sqlHost.Connection.LastInsertRowId}  # 1 если запись успешно добавлена, 0 если была ошибка
-        $sqlHost.Dispose()
+    {  # new record
+        $hID = Add-DBHost -obj $Scan
+        if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
     }
-    #endregion
 
-    #region Scan
-    $sqlScan = $con.CreateCommand()
-    $sqlScan.CommandText = @'
-        INSERT OR IGNORE INTO `Scan` (
-            `DiskID`,
-            `HostID`,
-            `ScanDate`,
-            `WMIData`,
-            `WMIThresholds`,
-            `WMIStatus`
-        ) VALUES (
-            @DiskID,
-            @HostID,
-            @ScanDate,
-            @WMIData,
-            @WMIThresholds,
-            @WMIStatus
-        );
-'@
-    $null = $sqlScan.Parameters.AddWithValue("@DiskID", $dctDisk[$d.SerialNumber])
-    $null = $sqlScan.Parameters.AddWithValue("@HostID", $dctHost[$d.HostName])
-    $null = $sqlScan.Parameters.AddWithValue("@ScanDate", $d.ScanDate)
-    $null = $sqlScan.Parameters.AddWithValue("@WMIData", $d.WMIData)
-    $null = $sqlScan.Parameters.AddWithValue("@WMIThresholds", $d.WMIThresholds)
-    $null = $sqlScan.Parameters.AddWithValue("@WMIStatus", $d.WMIStatus)
-    $null = $sqlScan.ExecuteNonQuery()  #) {}  # 1 если запись успешно добавлена, 0 если была ошибка
-    $sqlScan.Dispose()  #endregion
+    # Scan
+    $sID = Add-DBScan -obj $Scan -dID $DiskID[$Scan.SerialNumber] -hID $HostID[$Scan.HostName]
+
 }
-$con.Close()
 #endregion
 
 #region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
@@ -344,10 +246,3 @@ $TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
 #endregion
-
-<#
-UPDATE `Host`
-SET LastScan = "1"
-WHERE
-    Host.HostName = "qwe"
-#>

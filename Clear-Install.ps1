@@ -174,7 +174,7 @@ CREATE TABLE `Scan` (
 
 --CREATE UNIQUE INDEX `IndexDisk` ON `Disk` (`SerialNumber`);
 --CREATE UNIQUE INDEX `IndexHost` ON `Host` (`HostName`);
---CREATE UNIQUE INDEX `IndexScan` ON `Scan` (`DiskID`,`HostID`,`ScanDate`);
+CREATE UNIQUE INDEX `IndexScan` ON `Scan` (`DiskID`,`HostID`,`ScanDate`);
 '@
 $sql.ExecuteNonQuery()
 $sql.Dispose()
