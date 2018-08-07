@@ -2,7 +2,9 @@
 *.csv
 .bak
 .TODO
-ppsmart-posh.db
+*.db
+*.db-journal
+*.zip
 
 # folders
 *additional materials*/
