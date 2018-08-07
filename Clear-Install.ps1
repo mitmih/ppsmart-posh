@@ -97,7 +97,7 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
         if(!(Test-Path $file))
         {  #download
             (New-Object System.Net.WebClient).DownloadFile($links[$k], $file)
-            #Start-BitsTransfer -Source $links[$k] -Destination $links[$k].Split('/')[-1] #-Asynchronous
+#             Start-BitsTransfer -Source $links[$k] -Destination $links[$k].Split('/')[-1] #-Asynchronous
         }
         #endregion
 
@@ -172,12 +172,11 @@ CREATE TABLE `Scan` (
     `WMIStatus`		INTEGER
 );
 
-CREATE UNIQUE INDEX `SN` ON `Disk` (`SerialNumber`);
-CREATE UNIQUE INDEX `HN` ON `Host` (`HostName`);
+--CREATE UNIQUE INDEX `IndexDisk` ON `Disk` (`SerialNumber`);
+--CREATE UNIQUE INDEX `IndexHost` ON `Host` (`HostName`);
+--CREATE UNIQUE INDEX `IndexScan` ON `Scan` (`DiskID`,`HostID`,`ScanDate`);
 '@
-# $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
-# $data = New-Object System.Data.DataSet
-[void] (New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql).Fill((New-Object System.Data.DataSet))
+$sql.ExecuteNonQuery()
 $sql.Dispose()
 $con.Update
 $con.Close()
@@ -189,10 +188,4 @@ if(!(Test-Path $input))  {$null = New-Item -ItemType Directory -Path $input }
 (New-Object psobject -Property @{HostName = $env:COMPUTERNAME;LastScan = "never";}) | Select-Object "HostName", "LastScan" | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
 
 if(!(Test-Path $output)) {$null = New-Item -ItemType Directory -Path $output}
-#endregion
-
-#region
-#endregion
-
-#region
 #endregion
