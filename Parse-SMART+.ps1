@@ -77,7 +77,7 @@ $con.Open()
 
 # запрашиваем результаты сканов
 $sql = $con.CreateCommand()
-$sql.CommandText = @"
+$sql.CommandText = @'
 SELECT
 	Host.HostName,
 	Disk.Model,
@@ -91,7 +91,7 @@ FROM `Scan`
 INNER JOIN `Host` ON Scan.HostID = Host.ID
 INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
 ORDER BY Scan.ID;
-"@
+'@
 $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
 $data = New-Object System.Data.DataSet
 [void]$adapter.Fill($data)
@@ -107,7 +107,7 @@ foreach ($hd in $data.Tables.Rows) {
         Model    = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
         SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
-            
+
     foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)})) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
         try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
         catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}

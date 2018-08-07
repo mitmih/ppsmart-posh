@@ -234,7 +234,7 @@ foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Siz
     #region Disk # если диска нет в БД - вносим и запоминаем ID
     if (!($dctDisk.ContainsKey($d.SerialNumber))) {
         $sqlDisk = $con.CreateCommand()
-        $sqlDisk.CommandText = @"
+        $sqlDisk.CommandText = @'
             INSERT OR IGNORE INTO `Disk` (
                 `SerialNumber`,
                 `Model`,
@@ -252,7 +252,7 @@ foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Siz
                 @DeviceID,
                 @PNPDeviceID
             );
-"@
+'@
         $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $d.SerialNumber)
         $null = $sqlDisk.Parameters.AddWithValue("@Model", $d.Model)
         $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $d.Size)
@@ -289,7 +289,7 @@ foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Siz
 
     #region Scan
     $sqlScan = $con.CreateCommand()
-    $sqlScan.CommandText = @"
+    $sqlScan.CommandText = @'
         INSERT OR IGNORE INTO `Scan` (
             `DiskID`,
             `HostID`,
@@ -305,7 +305,7 @@ foreach ($d in $DiskInfo) {  # 'ScanDate' 'HostName' 'SerialNumber' 'Model' 'Siz
             @WMIThresholds,
             @WMIStatus
         );
-"@
+'@
     $null = $sqlScan.Parameters.AddWithValue("@DiskID", $dctDisk[$d.SerialNumber])
     $null = $sqlScan.Parameters.AddWithValue("@HostID", $dctHost[$d.HostName])
     $null = $sqlScan.Parameters.AddWithValue("@ScanDate", $d.ScanDate)

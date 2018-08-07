@@ -47,6 +47,18 @@ $input = Join-Path -Path $RootDir -ChildPath 'input'
 $output = Join-Path -Path $RootDir -ChildPath 'output'
 $x32 = Join-Path -Path $RootDir -ChildPath 'x32'
 $x64 = Join-Path -Path $RootDir -ChildPath 'x64'
+
+if ([IntPtr]::Size -eq 8)  # 64-bit
+{
+    Write-Host "64-bit" -ForeGround Green
+    $sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'
+}
+elseif ([IntPtr]::Size -eq 4)  # 32-bit
+{
+    Write-Host "32-bit" -ForeGround Green
+    $sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'
+}
+else {Write-Host 'can not choose between 32 or 64 bit dll`s'}
 #endregion
 
 #region возможность отменить
@@ -124,18 +136,6 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
 #endregion
 
 #region init ppsmart-posh.db
-    if ([IntPtr]::Size -eq 8)  # 64-bit
-    {
-        Write-Host "64-bit" -ForeGround Cyan
-        $sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'
-    }
-    elseif ([IntPtr]::Size -eq 4)  # 32-bit
-    {
-        Write-Host "32-bit" -ForeGround Cyan
-        $sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'
-    }
-    else {Write-Host 'can not choose between 32 or 64 bit dll`s'}
-
 try   {Add-Type -Path $sqlite -ErrorAction Stop}
 catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
 

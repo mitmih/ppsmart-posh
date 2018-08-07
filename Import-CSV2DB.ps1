@@ -67,7 +67,7 @@ foreach ($f in $WMIFiles) {
         #region Disk
         $SerialNumber = (Convert-hex2txt -wmisn $HardDrive.SerialNumber)
         $sqlDisk = $con.CreateCommand()
-        $sqlDisk.CommandText = @"
+        $sqlDisk.CommandText = @'
             INSERT OR IGNORE INTO `Disk` (
                 `SerialNumber`,
                 `Model`,
@@ -85,7 +85,7 @@ foreach ($f in $WMIFiles) {
                 @DeviceID,
                 @PNPDeviceID
             );
-"@
+'@
         $null = $sqlDisk.Parameters.AddWithValue("@SerialNumber", $SerialNumber)
         $null = $sqlDisk.Parameters.AddWithValue("@Model", $HardDrive.Model)
         $null = $sqlDisk.Parameters.AddWithValue("@Size", [int] $HardDrive.Size)
@@ -110,7 +110,7 @@ foreach ($f in $WMIFiles) {
 
         #region Scan
         $sqlScan = $con.CreateCommand()
-        $sqlScan.CommandText = @"
+        $sqlScan.CommandText = @'
             INSERT OR IGNORE INTO `Scan` (
                 `DiskID`,
                 `HostID`,
@@ -126,7 +126,7 @@ foreach ($f in $WMIFiles) {
                 @WMIThresholds,
                 @WMIStatus
             );
-"@
+'@
         $null = $sqlScan.Parameters.AddWithValue("@DiskID", $DiskID[$SerialNumber])
         $null = $sqlScan.Parameters.AddWithValue("@HostID", $HostID[$HardDrive.HostName])
         $null = $sqlScan.Parameters.AddWithValue("@ScanDate", $HardDrive.ScanDate)
