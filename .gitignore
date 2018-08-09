@@ -2,7 +2,7 @@
 *.csv
 .bak
 .TODO
-*.db
+*.db*
 *.db-journal
 *.zip
 

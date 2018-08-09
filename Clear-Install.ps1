@@ -157,9 +157,11 @@ CREATE TABLE `Disk` (
 );
 
 CREATE TABLE `Host` (
-	`ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	`HostName`		TEXT NOT NULL UNIQUE,
-	`LastScan`		TEXT
+	`ID`	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`HostName`	TEXT NOT NULL UNIQUE,
+	`LastScan`	TEXT DEFAULT 0,
+	`Ping`	INTEGER DEFAULT 0,
+	`WMIInfo`	INTEGER DEFAULT 0
 );
 
 CREATE TABLE `Scan` (
@@ -185,7 +187,7 @@ $con.Close()
 #region input, output
 # новая папка, соответствует битности библиотек
 if(!(Test-Path $input))  {$null = New-Item -ItemType Directory -Path $input }
-(New-Object psobject -Property @{HostName = $env:COMPUTERNAME;LastScan = "never";}) | Select-Object "HostName", "LastScan" | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
+(New-Object psobject -Property @{HostName = $env:COMPUTERNAME;}) | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
 
 if(!(Test-Path $output)) {$null = New-Item -ItemType Directory -Path $output}
 #endregion
