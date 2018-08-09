@@ -65,17 +65,19 @@
 param
 (
 #     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
+    [string] $Inp = ".\input\debug.csv",  # имя хоста либо путь к файлу списка хостов
     [string] $Out = ".\output\$('{0:yyyy-MM-dd_HH-mm}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
-    [int]    $k   = 35
+    [int]    $k   = 35,
+    [int]    $t = 23  # once again timer
 )
 
 #region  # НАЧАЛО
 $psCmdlet.ParameterSetName | Out-Null
-Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+# Clear-Host
+$WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
 Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+# [System.Security.Principal.WindowsIdentity]::GetCurrent().Name  # пригодится для set-credentials
 #endregion
 
 Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
@@ -100,24 +102,27 @@ $RunSpaces = @()
 
 #region: скрипт-блок задания, которое будет выполняться в потоке
 $Payload = {Param ([string] $name = '127.0.0.1')
+    
+    Write-Debug $name -Debug
 
-    for ($i = 0; $i -lt 2; $i++) {  # быстрее чем 'Test-Connection -Count 3'
+    for ($i = 0; $i -lt 2; $i++)
+    {  # быстрее чем 'Test-Connection -Count 3'
         $WMIInfo = @()
-        $ping = $false
-
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
-        if ($ping) {
-
+        if ($ping)
+        {  # при удачном ping получаем данные
             try {$Win32_DiskDrive = Get-WmiObject -ComputerName $name -class Win32_DiskDrive -ErrorAction Stop}
-            catch {$Win32_DiskDrive = @()}
+            catch {break}
 
-            foreach ($Disk in $Win32_DiskDrive) {
+            foreach ($Disk in $Win32_DiskDrive)
+            {
                 $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # в wql-запросе запрещены '\', поэтому заменим их на '_' (что означает "один любой символ"), см. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
 
                 # смарт-атрибуты, флаги
                 try {$WMIData = (Get-WmiObject -ComputerName $name -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific}
                 catch {$WMIData = @()}
-                if ($WMIData.Length -ne 512) {
+                if ($WMIData.Length -ne 512)
+                {
                     Write-Host "`t", $Disk.Model, "- в WMI нет данных S.M.A.R.T." -ForegroundColor DarkYellow
                     continue
                 }  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
@@ -133,7 +138,7 @@ $Payload = {Param ([string] $name = '127.0.0.1')
                 # добавляем новый диск в массив отчёта по дискам
                 Import-Module -Name ".\helper.psm1" -verbose
                 $WMIInfo += New-Object psobject -Property @{
-                    ScanDate      =          Get-Date
+                    ScanDate      =          $('{0:yyyy/MM/dd HH:mm}' -f $(Get-Date))
                     HostName      = [string] $name
                     SerialNumber  = [string] $Disk.SerialNumber.Trim()  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # не работает импорт модуля в скрипт-блоке
                     Model         = [string] $Disk.Model
@@ -147,16 +152,25 @@ $Payload = {Param ([string] $name = '127.0.0.1')
                     WMIStatus     = [boolean]$WMIStatus
                 }
             }
-            break
+            break  # и прерываем цикл проверки
         }
     }
 
-    Return @((New-Object psobject -Property @{HostName = $name;LastScan = [string] (Get-Date);}), $WMIInfo)
+    Return @(
+        (New-Object psobject -Property @{
+            HostName = $name
+            LastScan = if ($ping) {$('{0:yyyy/MM/dd HH:mm}' -f $(Get-Date))} else {0}
+            ping = if ($ping) {1} else {0}
+            WMIInfo = $WMIInfo.Count
+        }),
+        $WMIInfo
+    )
 }
 #endregion
 
 #region: запускаем задание и добавляем потоки в пул
-foreach ($C in $Computers) {
+foreach ($C in $Computers)
+{
     $NewShell = [PowerShell]::Create()
 
     $null = $NewShell.AddScript($Payload)
@@ -164,33 +178,141 @@ foreach ($C in $Computers) {
 
     $NewShell.RunspacePool = $Pool
 
-    $RunSpaces += [PSCustomObject]@{ Pipe = $NewShell; Status = $NewShell.BeginInvoke() }
+    $RunSpace = [PSCustomObject]@{ Pipe = $NewShell; Status = $NewShell.BeginInvoke() }
+    $RunSpaces += $RunSpace 
 }
 #endregion
 
 #region: после завершения каждого потока собираем его данные и закрываем, а после завершения всех потоков закрываем пул
-if ($RunSpaces.Count -gt 0) {  # fixed bug: а были ли запущены потоки? - в случае пустого input-файла скрипт зависал на цикле while, т.к. ждал завершения хотя бы одного потока, хотя их вообще не было...
-    while ($RunSpaces.Status.IsCompleted -notcontains $true) {}  # ждём завершения хотя бы одного потока начинаем принимать данные
+$dctCompleted = @{}  # словарь завершенных заданий
+$dctHang = @{}  # незавершённые задания
+$total = $RunSpaces.Count  # общее кол-во потоков
+While ($RunSpaces.Status.IsCompleted -contains $false)
+{
+    $wpCompl = "Проверка сетевой доступности компьютера и сбор S.M.A.R.T. данных - завершёнка"
+    $wpNoCompl = "Проверка сетевой доступности компьютера и сбор S.M.A.R.T. данных - незавершёнка"
+        
+    $c_true = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $true}
+    $c_true_filtred = $c_true | Where-Object -FilterScript {!$dctCompleted.ContainsKey($_.Pipe.InstanceId.Guid)}
+    foreach ($RS in $c_true_filtred)  # цикл по завершённым_факт, который ещё нет в словаре (завершённых_учёт)
+    {
+            $Result = @() # $null
+            if($RS.Status.IsCompleted -and !$dctCompleted.ContainsKey($RS.Pipe.InstanceId.Guid))# $RS.Pipe.InstanceId.Guid -notin $dctCompleted.Keys )
+            {
+                $Result = $RS.Pipe.EndInvoke($RS.Status)
+                $RS.Pipe.Dispose()
+                
+                $ComputersOnLine += $Result[0]
+                if ($Result[1].Count -gt 0) {$DiskInfo += $Result[1]}
 
-    $t = ($RunSpaces.Status).Count  # общее кол-во потоков
-    foreach ($RS in $RunSpaces ) {
+                $dctCompleted[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
+        
+                Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
+                
+                if($dctHang.ContainsKey($RS.Pipe.InstanceId.Guid))
+                {
+                    $dctHang.Remove($RS.Pipe.InstanceId.Guid)
+                }
+            }
+        }
+
+    # Start-Sleep -Milliseconds 50
+    $c_false = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $false}
+    foreach($RS in $c_false)  # цикл по незавершённым
+    {
         $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
-        Write-Progress -id 1 -PercentComplete (100 * $p / $t) -Activity "Проверка сетевой доступности компьютера и сбор S.M.A.R.T. данных" -Status "всего: $t" -CurrentOperation "осталось: $p"
-
-        $Result = $RS.Pipe.EndInvoke($RS.Status)
-        $ComputersOnLine += $Result[0]
-        if ($Result[1].Count -gt 0) {$DiskInfo += $Result[1]}
-        $RS.Pipe.Dispose()
+        Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
+            
+        $dctHang[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
+            
+        if ($c_false.Count -ne $p) {break}
     }
-    $Pool.Close()
-    $Pool.Dispose()
+        
+    # Start-Sleep -Milliseconds 50
+    $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+    Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Yellow
+        
+    $escape = $($p -eq $dctHang.Count) -and $($total -eq ($dctCompleted.Count + $p))
+    if ($escape)
+    {
+        Start-Sleep -Seconds $t # 31  # ещё чуть подождём опоздавшие потоки
+            
+        $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+        $escape = $($p -eq $dctHang.Count) -and $($total -eq ($dctCompleted.Count + $p))
+            
+        if ($escape)
+        {
+            Write-Host 'после ', $t, 'сек кол-во незавершённых потоков осталось прежним. Выход из Multi-Threading-цикла...' -ForegroundColor Red
+            Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Magenta
+
+            $RunSpaces | Where-Object -FilterScript {$_.Pipe.InstanceId.Guid -in ($dctHang.Keys)} | foreach {Write-Host $_.Pipe.Streams.Debug, $_.Pipe.Streams.Information, "`t", $_.Pipe.InstanceId.Guid -ForegroundColor Magenta}
+            #$RunSpaces | Where-Object -FilterScript {$_.Pipe.InstanceId.Guid -in ($dctHang.Keys)} | select -ExpandProperty Pipe | select -ExpandProperty Streams
+            
+            break
+        }
+        else
+        {
+            Write-Host -ForegroundColor Green 'пауза в', $t, 'сек закончилась. Эх раз, ещё раз... :-)'
+        }
+    }
+    else
+    {
+        continue
+    }
+        
+    if ($WatchDogTimer.Elapsed.TotalMinutes -gt $t) {break}
 }
+
+<# здесь нужно добавить обработку незавершённых потоков, прежде чем закрывать пул или запустить Job по закрытию потоков и пула
+foreach($RS in  $RunSpaces | Where-Object -FilterScript {$dctHang.ContainsKey($_.Pipe.InstanceId.Guid)})
+{
+    $RS.Pipe.InstanceId.Guid
+    $RS.Pipe.Streams
+    # $RS.Pipe.Stop()  # hang
+}
+
+# $Pool.Close()
+# $Pool.Dispose()
+#>
 #endregion
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Multi-Threading passed' -ForegroundColor Cyan
 #endregion Multi-Threading
 
-#region: обновление БД
 foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): SerialNumber`s converted' -ForegroundColor Cyan
 
+#region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
+$DiskInfo | Select-Object `
+    'HostName',`
+    'ScanDate',`
+    'SerialNumber',`
+    'Model',`
+    'Size',`
+    'InterfaceType',`
+    'MediaType',`
+    'DeviceID',`
+    'PNPDeviceID',`
+    'WMIData',`
+    'WMIThresholds',`
+    'WMIStatus'`
+    | Sort-Object -Property 'HostName' | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
+
+# если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
+if (Test-Path -Path $Inp)
+{
+        #$ComputersOnLine | Select-Object "HostName","LastScan","ping","WMIInfo" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8
+    $ComputersOnLine += ($Computers | Where-Object -FilterScript {$_.HostName -notin $ComputersOnLine.HostName} | `
+        Select-Object -Property 'HostName',`
+        @{Expression = {0} ; name='LastScan'},`
+        @{Expression = {0} ; name='ping'},`
+        @{Expression = {0} ; name='WMIInfo'})
+
+    $ComputersOnLine | Sort-Object -Property 'HostName' | Select-Object -Property 'HostName','LastScan','ping','WMIInfo' | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8
+}
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Export-Csv completed' -ForegroundColor Cyan
+#endregion
+
+#region: обновление БД
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
 foreach ($Scan in $DiskInfo)
@@ -218,31 +340,10 @@ foreach ($Scan in $DiskInfo)
     $sID = Add-DBScan -obj $Scan -dID $DiskID[$Scan.SerialNumber] -hID $HostID[$Scan.HostName]
 
 }
-#endregion
-
-#region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
-$DiskInfo | Select-Object `
-    'ScanDate',`
-    'HostName',`
-    'SerialNumber',`
-    'Model',`
-    'Size',`
-    'InterfaceType',`
-    'MediaType',`
-    'DeviceID',`
-    'PNPDeviceID',`
-    'WMIData',`
-    'WMIThresholds',`
-    'WMIStatus'`
-    | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
-
-# если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
-if (Test-Path -Path $Inp) {$ComputersOnLine | Select-Object "HostName", "LastScan" | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8}
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): DataBase updated' -ForegroundColor Cyan
 #endregion
 
 #region  # КОНЕЦ
-# замер времени выполнения скрипта
-$TimeStart += Get-Date
-$ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
-Write-Host "execution time is" $ExecTime "second(s)"
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): executed' -ForegroundColor  Green
+$WatchDogTimer.Stop()  # $WatchDogTimer.Elapsed.TotalSeconds
 #endregion
