@@ -41,12 +41,23 @@ param
 (
      [string] $ReportDir = '.\output'  #
 )
-$psCmdlet.ParameterSetName | Out-Null
-Clear-Host
-$TimeStart = Get-Date # замер времени выполнения скрипта
-set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # локальная корневая папка "./" = текущая директория скрипта
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+
+#region  # НАЧАЛО
+
+$psCmdlet.ParameterSetName | Out-Null
+
+Clear-Host
+
+$WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
+
+$RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
+Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+
+Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогательный модуль с функциями
+
+#endregion
+
 
 $WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv'  # отчёты по дискам
 
@@ -93,6 +104,10 @@ foreach ($DrivesReportFile in $WMIFiles) {
     # Remove-Item -Path $DrivesReportFile  # удаляем прочитанный отчёт с "сырыми" данными
 }
 
-# замер времени выполнения скрипта
-$ExecTime = [System.Math]::Round($( $(Get-Date) - $TimeStart ).TotalSeconds,1)
-Write-Host "execution time is" $ExecTime "second(s)"
+
+#region  # КОНЕЦ
+
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): executed' -ForegroundColor  Green
+$WatchDogTimer.Stop()  # $WatchDogTimer.Elapsed.TotalSeconds
+
+#endregion

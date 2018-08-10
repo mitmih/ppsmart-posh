@@ -83,6 +83,7 @@ $dctSMART = @{
     999='testName'
 }  # словарь атрибутов
 
+
 function Convert-WMIArrays ([string] $data, [string] $thresh) {
 <#
 .SYNOPSIS
@@ -185,6 +186,7 @@ function Convert-WMIArrays ([string] $data, [string] $thresh) {
     return $Result
 }
 
+
 function Convert-Flags ([int] $flagDec) {
 <#
 .SYNOPSIS
@@ -265,6 +267,7 @@ function Convert-Flags ([int] $flagDec) {
     return "$b5 $b4 $b3 $b2 $b1 $b0"
 }
 
+
 function Convert-hex2txt ([string] $wmisn) {
 <#
 .SYNOPSIS
@@ -314,6 +317,7 @@ function Convert-hex2txt ([string] $wmisn) {
 
     return $txt.Trim()
 }
+
 
 function Get-DBHashTable ([string] $table) {
 <#
@@ -381,24 +385,48 @@ foreach ($r in $data.Tables.Rows) {$dct[$r.TXT] = $r.ID}
 return $dct
 }
 
-function Add-DBDisk ($obj = $null) {
+
+# function Get-DBScanResults
+
+
+function Update-DB (
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$tact = $null,
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)]         $obj  = $null,
+    [parameter(Mandatory=$false, ValueFromPipeline=$false)]   [int]$id   = $null)
+{
 <#
 .SYNOPSIS
-    добавляет новый Disk в БД
+    добавляет/обновляет запись в таблицу БД
 
 .DESCRIPTION
-    добавляет новую запись в таблицу и возвращает её ID
+    при добавлении возвращает primary key новой записи
+    при обновлении существующей записи возвращает $null
 
 .INPUTS
-    объект - жёсткий диск
+    объект с результатами сканирования жёсткого диска
 
 .OUTPUTS
-    ID новой записи либо 0
+    ID новой записи или $null
 
-.PARAMETER
+.PARAMETER obj
+    объект, содержащий Properties для SQL-запроса в БД
+
+.PARAMETER tact
+    table action - название SQL-запроса, возможные запросы:
+        NewHost / UpdHost
+        NewDisk / UpdDisk
+        NewScan / UpdScan
+
+.PARAMETER id
+    primary key записи, которую нужно обновить
 
 .EXAMPLE
-    $id = Add-DBDisk -obj $HardDrive
+    $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
+        добавить новую запись
+
+.EXAMPLE
+    $null= Update-DB -tact UpdHost -obj ($Scan | Select-Object -Property 'HostName') -id $HostID[$Scan.HostName]
+        обновить запись по её primary key
 
 .LINK
 
@@ -406,204 +434,107 @@ function Add-DBDisk ($obj = $null) {
     Author: Dmitry Mikhaylov
 #>
 
-try
-{
-    # проверка битности среды выполнения для подключения подходящей библиотеки
-    if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
-    if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
-    
-    # подключение библиотеки для работы с sqlite
-    Add-Type -Path $sqlite -ErrorAction Stop
+    $newrecID = $null
 
-    # открытие соединения с БД
-    $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
-    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-    $con.ConnectionString = "Data Source=$db"
-    $con.Open()
-}
-catch
-{
-    return $null
-}
+    $dctQuery = @{
+        'NewHost' = 'INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);'
 
-# исполнение SQL-запроса, с случае успеха возвращаем ID новой записи, иначе возвращаем 0
-$sql = $con.CreateCommand()
-$sql.CommandText = @'
-INSERT OR IGNORE INTO `Disk` (
-    `SerialNumber`,
-    `Model`,
-    `Size`,
-    `InterfaceType`,
-    `MediaType`,
-    `DeviceID`,
-    `PNPDeviceID`
-) VALUES (
-    @SerialNumber,
-    @Model,
-    @Size,
-    @InterfaceType,
-    @MediaType,
-    @DeviceID,
-    @PNPDeviceID
-);
+        'UpdHost' = 'UPDATE `Host` SET `ScanDate` = @ScanDate, `Ping` = @Ping, `WMIInfo` = @WMIInfo WHERE ID = @ID;'
+
+        'NewDisk' = @'
+            INSERT OR IGNORE INTO `Disk` (
+                `SerialNumber`,
+                `Model`,
+                `Size`,
+                `InterfaceType`,
+                `MediaType`,
+                `DeviceID`,
+                `PNPDeviceID`
+            ) VALUES (
+                @SerialNumber,
+                @Model,
+                @Size,
+                @InterfaceType,
+                @MediaType,
+                @DeviceID,
+                @PNPDeviceID
+            );
 '@
 
-$null = $sql.Parameters.AddWithValue("@SerialNumber", $obj.SerialNumber)
-$null = $sql.Parameters.AddWithValue("@Model", $obj.Model)
-$null = $sql.Parameters.AddWithValue("@Size", [int] $obj.Size)
-$null = $sql.Parameters.AddWithValue("@InterfaceType", $obj.InterfaceType)
-$null = $sql.Parameters.AddWithValue("@MediaType", $obj.MediaType)
-$null = $sql.Parameters.AddWithValue("@DeviceID", $obj.DeviceID)
-$null = $sql.Parameters.AddWithValue("@PNPDeviceID", $obj.PNPDeviceID)
+        'UpdDisk' = ''
 
-if ($sql.ExecuteNonQuery()) {$newrecID = ([int] $sql.Connection.LastInsertRowId)} else {$newrecID = 0}
-return $newrecID
-}
+        'NewScan' = @'
+            INSERT OR IGNORE INTO `Scan` (
+                `DiskID`,
+                `HostID`,
+                `ScanDate`,
+                `WMIData`,
+                `WMIThresholds`,
+                `WMIStatus`
+            ) VALUES (
+                @DiskID,
+                @HostID,
+                @ScanDate,
+                @WMIData,
+                @WMIThresholds,
+                @WMIStatus
+            );
+'@
 
-function Add-DBHost ($obj = $null, $id = $null) {
-<#
-.SYNOPSIS
-    добавляет новый Host в БД либо обновляет уже внесённый
-
-.DESCRIPTION
-    добавляет новую запись в таблицу и возвращает Host.ID
-    либо по переданному Host.ID обновляет поле Host.LastScan
-
-.INPUTS
-    объект - жёсткий диск
-
-.OUTPUTS
-    ID новой записи либо 0
-
-.PARAMETER
-
-.EXAMPLE
-    $id = Add-DBHost -obj $HardDrive
-
-.EXAMPLE
-    $id = Add-DBHost -obj $HardDrive -id $HostID[$HardDrive.HostName]
-
-.LINK
-
-.NOTES
-    Author: Dmitry Mikhaylov
-#>
-
-try
-{
-    # проверка битности среды выполнения для подключения подходящей библиотеки
-    if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
-    if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
-    
-    # подключение библиотеки для работы с sqlite
-    Add-Type -Path $sqlite -ErrorAction Stop
-
-    # открытие соединения с БД
-    $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
-    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-    $con.ConnectionString = "Data Source=$db"
-    $con.Open()
-}
-catch
-{
-    return $null
-}
-
-$sql = $con.CreateCommand()
-if ($id -ne $null)  # если в таблице с компьютерами уже есть запись
-{  # update record
-    $sql.CommandText = 'UPDATE `Host` SET LastScan = @LastScan WHERE ID = @ID'
-    $null = $sql.Parameters.AddWithValue("@LastScan", $obj.ScanDate)
-    $null = $sql.Parameters.AddWithValue("@ID", $id)
-    $null = $sql.ExecuteNonQuery()
-    $newrecID = 0
-}
-else  # если записи нет
-{  # add new record
-    $sql.CommandText = "INSERT OR IGNORE INTO `Host` (`HostName`, `LastScan`) VALUES (@HostName,@LastScan);"
-    $null = $sql.Parameters.AddWithValue("@HostName", $obj.HostName)
-    $null = $sql.Parameters.AddWithValue("@LastScan", $obj.ScanDate)
-    if ($sql.ExecuteNonQuery())  # 1 если запись успешно добавлена, 0 если была ошибка
-    {
-        $newrecID = $sql.Connection.LastInsertRowId
+        'UpdScan' = ''
     }
-}
 
-return $newrecID
-}
 
-function Add-DBScan ($obj = $null, $dID = $null, $hID = $null) {
-<#
-.SYNOPSIS
-    добавляет новый Disk в БД
+    try
 
-.DESCRIPTION
-    добавляет новую запись в таблицу и возвращает её ID
-
-.INPUTS
-    объект - жёсткий диск
-
-.OUTPUTS
-    ID новой записи либо 0
-
-.PARAMETER
-
-.EXAMPLE
-    $id = Add-DBDisk -obj $HardDrive
-
-.LINK
-
-.NOTES
-    Author: Dmitry Mikhaylov
-#>
-
-try
-{
-    # проверка битности среды выполнения для подключения подходящей библиотеки
-    if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
-    if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
+    {
+        # проверка битности среды выполнения для подключения подходящей библиотеки
+        if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
+        if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
     
-    # подключение библиотеки для работы с sqlite
-    Add-Type -Path $sqlite -ErrorAction Stop
+        # подключение библиотеки для работы с sqlite
+        Add-Type -Path $sqlite -ErrorAction Stop
 
-    # открытие соединения с БД
-    $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
-    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-    $con.ConnectionString = "Data Source=$db"
-    $con.Open()
-}
-catch
-{
-    return $null
-}
+        # открытие соединения с БД
+        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+        $con.ConnectionString = "Data Source=$db"
+        $con.Open()
 
-# исполнение SQL-запроса, с случае успеха возвращаем ID новой записи, иначе возвращаем 0
-$sql = $con.CreateCommand()
-$sql.CommandText = @'
-    INSERT OR IGNORE INTO `Scan` (
-        `DiskID`,
-        `HostID`,
-        `ScanDate`,
-        `WMIData`,
-        `WMIThresholds`,
-        `WMIStatus`
-    ) VALUES (
-        @DiskID,
-        @HostID,
-        @ScanDate,
-        @WMIData,
-        @WMIThresholds,
-        @WMIStatus
-    );
-'@
+        $sql = $con.CreateCommand()
+        $sql.CommandText = $dctQuery[$tact]
+        
+        $objValidProperties = $obj | Get-Member -MemberType Properties -ErrorAction Stop
+    }
+    
+    catch
+    
+    {
+        if($sql -ne $null) { $sql.Dispose() }
+        if ($con.State -eq 'Open') { $con.Close() }
 
-$null = $sql.Parameters.AddWithValue("@DiskID", $dID)
-$null = $sql.Parameters.AddWithValue("@HostID", $hID)
-$null = $sql.Parameters.AddWithValue("@ScanDate", $obj.ScanDate)
-$null = $sql.Parameters.AddWithValue("@WMIData", $obj.WMIData)
-$null = $sql.Parameters.AddWithValue("@WMIThresholds", $obj.WMIThresholds)
-$null = $sql.Parameters.AddWithValue("@WMIStatus", $(if( ([string]$obj.WMIStatus).ToLower() -eq 'true' ) {1} else {0}))
+        return $newrecID
+    }
 
-if ($sql.ExecuteNonQuery()) {$newrecID = ([int] $sql.Connection.LastInsertRowId)} else {$newrecID = 0}
-return $newrecID
+
+    foreach ($p in $objValidProperties)
+        
+    {
+        $null = $sql.Parameters.AddWithValue("@$($p.Name)", ($obj | select -ExpandProperty $p.Name) )
+    }
+
+
+    if ($id)  # update record (передан primary key)
+    {
+        $null = $sql.Parameters.AddWithValue("@ID", $id)
+        $null = $sql.ExecuteNonQuery()
+    }
+
+    else  # add new record
+
+    {
+        if ($sql.ExecuteNonQuery()) { $newrecID = $sql.Connection.LastInsertRowId }
+    }
+
+    return $newrecID
 }

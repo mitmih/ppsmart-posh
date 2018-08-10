@@ -10,7 +10,7 @@
     сценарий:
         сканирует одиночный хост либо список машин
         получает через WMI доступные S.M.A.R.T.-данные жёстких дисков
-        сохраняет отчёт в '.\output\yyyy-MM-dd_HH-mm $inp drives.csv'
+        сохраняет отчёт в '.\output\yyyy-MM-dd $inp drives.csv'
 
 .INPUTS
     имя компьютера в формате "mylaptop"
@@ -23,7 +23,7 @@
     коэффициент - кол-во потоков, которые будут запущены на каждом логическом ядре
 
     в обязательном поле "HostName" указываются имена компьютеров
-    поле "LastScan" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
+    поле "ScanDate" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
 
 .OUTPUTS
     csv-файл с "сырыми" S.M.A.R.T.-данными
@@ -67,29 +67,31 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-#     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
+    [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
+#     [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
     [string] $Out = ".\output\$('{0:yyyy-MM-dd}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
     [int]    $k   = 37,
-    [int]    $t   = 17  # once again timer
+    [int]    $t   = 1  # once again timer
 )
 
 
 #region  # НАЧАЛО
 
 $psCmdlet.ParameterSetName | Out-Null
-# Clear-Host
+
+Clear-Host
+
 $WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
+
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
 Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
-# [System.Security.Principal.WindowsIdentity]::GetCurrent().Name  # пригодится для set-credentials
+
+Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогательный модуль с функциями
 
 #endregion
 
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
-
-if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;LastScan = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;ScanDate = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
 
 $clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
 if ($clones -ne $null) {Write-Host "'$Inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
@@ -179,7 +181,7 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
     Return @(
         (New-Object psobject -Property @{
             HostName = $name
-            LastScan = $('{0:yyyy.MM.dd}' -f $(Get-Date))
+            ScanDate = $('{0:yyyy.MM.dd}' -f $(Get-Date))
             Ping = if ($ping) {1} else {0}
             WMIInfo = $WMIInfo.Count
         }),
@@ -215,7 +217,7 @@ $dctHang = @{}  # незавершённые задания
 $total = $RunSpaces.Count  # общее кол-во потоков
 
 # в случае локального компьютера поток может завершиться до начала цикла, и чтобы получить данные нужно выполнить его хотя бы один раз
-While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $true}).Count) )
+While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $true}).Count) )
 {
     $wpCompl   = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных,   ЗАВЕРШЁННЫЕ потоки"
     $wpNoCompl = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных, НЕЗАВЕРШЁННЫЕ потоки"
@@ -285,7 +287,7 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq 
 
         if ($escape)
         {
-            Write-Host 'после ', $t, 'сек кол-во незавершённых потоков осталось прежним. Выход из Multi-Threading-цикла...' -ForegroundColor Red
+            Write-Host 'пауза в', $t, 'сек закончилась. Все незавершённые потоки считаются "зависшими" .Выход из Multi-Threading-цикла...' -ForegroundColor Red
             Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Magenta
 
             $RunSpaces | Where-Object -FilterScript {$_.Pipe.InstanceId.Guid -in ($dctHang.Keys)} | foreach {Write-Host $_.Pipe.Streams.Debug, $_.Pipe.Streams.Information, "`t", $_.Pipe.InstanceId.Guid -ForegroundColor Red}
@@ -375,32 +377,39 @@ $HostID = Get-DBHashTable -table 'Host'
 
 foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
 {
-    # Disk
-    if (!$DiskID.ContainsKey($Scan.SerialNumber))
-    {
-        $dID = Add-DBDisk -obj $Scan
-        if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
-    }
-
 
     # Host
-    if ($HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
-    {  # update record
-        $hID = Add-DBHost -obj $Scan -id $HostID[$Scan.HostName]
-    }
+    if (!$HostID.ContainsKey($Scan.HostName))  # new record
 
-    else
+    {
+        $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
 
-    {  # new record
-        $hID = Add-DBHost -obj $Scan
         if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
     }
 
 
-    # Scan
-    $sID = Add-DBScan -obj $Scan -dID $DiskID[$Scan.SerialNumber] -hID $HostID[$Scan.HostName]
+    # Disk
+    if (!$DiskID.ContainsKey($Scan.SerialNumber))  # new record
+
+    {
+        $dID = Update-DB -tact NewDisk -obj ($Scan | Select-Object -Property `
+                'SerialNumber', 'Model', 'Size', 'InterfaceType', 'MediaType', 'DeviceID', 'PNPDeviceID')
+
+        if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
+    }
+
+
+        # Scan  # таблица имеет уникальный индекс 	`DiskID`, `HostID`, `ScanDate`
+        $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
+                @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
+                @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
+                'ScanDate',
+                'WMIData',
+                'WMIThresholds',
+                'WMIStatus')
 
 }
+
 Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): DataBase updated' -ForegroundColor Cyan
 
 #endregion

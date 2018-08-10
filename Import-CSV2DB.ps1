@@ -29,75 +29,117 @@ param
     [string] $csvDir = 'output'
 )
 
+
 #region  # НАЧАЛО
+
 $psCmdlet.ParameterSetName | Out-Null
+
 Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+
+$WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
+
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
 Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
-#endregion
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогательный модуль с функциями
+
+#endregion
 
 $WMIFiles = Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath $csvDir) -Filter '*drives.csv' -Recurse
 
-#region заполним словари из базы
+
+#region перенос результатов сканирований из CSV-файлов в SQLite БД
+$dateError = @{}
+
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
-#endregion
 
-$p2 = Measure-Command {
-#region перенос списка хостов из CSV-файлов в SQLite БД
-foreach ($f in Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath 'input') -Filter '*.csv' -Recurse)
+foreach ($f in $WMIFiles)
+
 {
-    foreach ($line in Import-Csv $f.FullName)
-    {
-        if (!$HostID.ContainsKey($line.HostName))
-        {  # new record
-            $hID = Add-DBHost -obj (New-Object psobject -Property @{HostName = $line.HostName;ScanDate = 0;})
-            if ($hID -gt 0) {$HostID[$line.HostName] = $hID}
-        }
-    }
-}
-#endregion
-} | select -ExpandProperty TotalSeconds
+    $Scans = Import-Csv $f.FullName
 
-$p3 = Measure-Command {
-#region перенос результатов сканирований из CSV-файлов в SQLite БД
-foreach ($f in $WMIFiles) {
-    foreach ($Scan in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
-        # Disk
-        $Scan.SerialNumber = (Convert-hex2txt -wmisn $Scan.SerialNumber)
-        if (!$DiskID.ContainsKey($Scan.SerialNumber))
+    foreach ($Scan in $Scans)  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
+
+    {
+        #region преобразование SerialNumber и ScanDate к виду yyyy.MM.dd
+
+        try
+
         {
-            $dID = Add-DBDisk -obj $Scan
-            if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
+            if ($Scan.ScanDate -match '\d\d_\d\d')  # 2018-08-08_15-59
+            { $Scan.ScanDate = [datetime]::ParseExact($Scan.ScanDate, 'yyyy-MM-dd_HH-mm', $null) }
+
+            elseif ($Scan.ScanDate -match '\d* \d*:\d\d:\d\d')  # 16.07.2018 9:43:49
+            { $Scan.ScanDate = [datetime]::ParseExact($Scan.ScanDate, 'dd.MM.yyyy H:mm:ss', $null) }
+
+            elseif ($Scan.ScanDate -match '\d* \d*:\d\d')  # 2018.08.09 19:19
+            { $Scan.ScanDate = [datetime]::ParseExact($Scan.ScanDate, 'yyyy.MM.dd H:mm', $null) }
+
+            elseif ($Scan.ScanDate.Length -le 11)  # 2018.08.10
+            { $Scan.ScanDate = [datetime]::ParseExact($Scan.ScanDate, 'yyyy.MM.dd', $null) }
+
+            else
+            { $Scan.ScanDate = [datetime] $Scan.ScanDate }
+
+            $Scan.SerialNumber = (Convert-hex2txt -wmisn $Scan.SerialNumber)
+
         }
+
+        catch
+
+        {
+            $dateError[$f] = $Scan.ScanDate
+        }
+
+        $Scan.ScanDate = $('{0:yyyy.MM.dd}' -f $Scan.ScanDate)
+
+        $Scan.SerialNumber = (Convert-hex2txt -wmisn $Scan.SerialNumber)
+
+        #endregion
 
         # Host
-        if ($HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
-        {  # update record
-            $hID = Add-DBHost -obj $Scan -id $HostID[$Scan.HostName]
-        }
-        else
+        if (!$HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
+
         {  # new record
-            $hID = Add-DBHost -obj $Scan
+            $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
+
             if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
         }
 
-        # Scan
-        $sID = Add-DBScan -obj $Scan -dID $DiskID[$Scan.SerialNumber] -hID $HostID[$Scan.HostName]
-    }
-}  #endregion
-} | select -ExpandProperty TotalSeconds
 
-#region  # КОНЕЦ
-# замер времени выполнения скрипта
-$TimeStart += Get-Date
-$ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
-Write-Host "execution time is" $ExecTime "second(s)"
+        # Disk
+        if (!$DiskID.ContainsKey($Scan.SerialNumber))
+
+        {
+            $dID = Update-DB -tact NewDisk -obj ($Scan | Select-Object -Property `
+                    'SerialNumber', 'Model', 'Size', 'InterfaceType', 'MediaType', 'DeviceID', 'PNPDeviceID')
+
+            if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
+        }
+
+
+        # Scan
+        $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
+                @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
+                @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
+                'ScanDate',
+                'WMIData',
+                'WMIThresholds',
+                'WMIStatus')
+    }
+
+    Write-Host $WatchDogTimer.Elapsed.TotalSeconds "seconds`t file" $f.name -ForegroundColor  Green
+}
+
+$dateError
+
 #endregion
 
-# Write-Host -ForegroundColor Green $p1, 'region заполним словари из базы'
-Write-Host -ForegroundColor Green $p2, 'region перенос списка хостов из CSV-файлов в SQLite БД'
-Write-Host -ForegroundColor Green $p3, 'region перенос результатов сканирований из CSV-файлов в SQLite БД'
+
+#region  # КОНЕЦ
+
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): executed' -ForegroundColor  Green
+$WatchDogTimer.Stop()  # $WatchDogTimer.Elapsed.TotalSeconds
+
+#endregion

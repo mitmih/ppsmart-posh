@@ -44,21 +44,32 @@ param
 )
 
 #region  # НАЧАЛО
+
 $psCmdlet.ParameterSetName | Out-Null
+
 Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+
+$WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
+
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
 Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+
+Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогательный модуль с функциями
+
 #endregion
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
 
 $WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # отчёты по дискам
+
 $AllInfo = @()  # полная инфа по всем дискам из всех отчётов
+
 $Degradation = @()  # деградация по 5-му атрибуту (remap)
+
 $Stable = @()  # стабильные, без деградации по 5-му атрибуту (remap)
 
+
 #region  # читаем WMI-отчёты из БД
+
 # проверяем битность среды выполнения для подключения подходящей библиотеки
 if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
 elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
@@ -98,71 +109,88 @@ $data = New-Object System.Data.DataSet
 $sql.Dispose()
 $con.Close()
 
-Measure-Command {###########################################
-# обрабатываем результаты сканов $data.Tables.Rows.Count
-foreach ($hd in $data.Tables.Rows) {
+
+#region "разворот" данных
+
+foreach ($hd in $data.Tables.Rows)  # обрабатываем результаты сканов $data.Tables.Rows.Count
+# $data.Tables.Rows | Select-Object -Property SerialNumber, HostName, ScanDate, @{Name="Model"; Expression = {$_.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')}}
+{
     $Disk = (New-Object PSObject -Property @{
         ScanDate = $hd.ScanDate
-        PC       = $hd.HostName
+        HostName       = $hd.HostName
         Model    = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
-        SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
+        SerialNumber    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
+    
+    
+    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)}))  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
 
-    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)})) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-        try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
-        catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}
-    }
-    $AllInfo += $Disk
-}
-} | select -ExpandProperty TotalSeconds ###########################################
-#endregion
-
-#region  # читаем WMI-отчёты из файлов
-<#foreach ($f in $WMIFiles) {
-    foreach ($HardDrive in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
-        $Disk = (New-Object PSObject -Property @{
-            ScanDate = $HardDrive.ScanDate
-            PC       = $HardDrive.HostName
-            Model    = $HardDrive.Model
-            SerNo    = Convert-hex2txt -wmisn ([string] $HardDrive.SerialNumber.Trim())
-            })
-        foreach ($atr in Convert-WMIArrays -data $HardDrive.WMIData -thresh $HardDrive.WMIThresholds) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
-            catch {Write-Host "DUPLICATE: '$($HardDrive.HostName)' in '$($f.Name)'" -ForegroundColor Red}
+    {
+        try    # на случай дубликатов в отчёте и ошибки добавления атрибутов
+        
+        {
+            $Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop
         }
-        $AllInfo += $Disk
+        
+        catch
+        
+        {
+            Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red
+        }
     }
-}#>
+    
+    
+    $AllInfo += $Disk
+} #endregion
+
 #endregion
+
 
 #region  # поиск деградаций по 5-му атрибуту
-foreach ($g in $AllInfo | Sort-Object -Property PC,ScanDate | Group-Object -Property SerNo) {
+
+foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Object -Property SerialNumber)
+
+{
     $g_ex = $g | Select-Object -ExpandProperty Group
+    
     $g_5 = $g_ex | Group-Object -Property '5'
 
-    # если группа 'SerNo' > группы по '5', это деградация по 'remap'
+    
     # if ($g.Count -gt 1) {"`v", $g, $g_5} # для наглядности можно включить вывод в консоль обеих групп
-    if ($g.Count -eq $g_5.Count) {
+    
+    
+    if ($g.Count -eq $g_5.Count)  # если группа 'SerialNumber' = группе по '5', это НЕ деградация по 'remap', добавим диск в стабильные и продолжим поиск
+    
+    {
         $Stable += $g_ex | Select-Object -Last 1
-        # Write-Host ($g_ex | Select-Object -Property 'PC' -Unique).PC -ForegroundColor Green
+        # Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Green
         Continue
     }
 
-    Write-Host ($g_ex | Select-Object -Property 'PC' -Unique).PC -ForegroundColor Magenta
-#     $Degradation += $g_ex
-    foreach ($r in $g_5) {
-        $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1)
+    
+    Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Magenta
+
+    
+    foreach ($r in $g_5)
+    
+    {
+        $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1)  # в отчёт попадёт только впервые зафиксированное изменение атрибута
     }
 }
-#endregion#>
+
+#endregion
+
 
 #region  # отчёт Degradation
+
 $ReportDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
+
 if (Test-Path -Path $ReportDegradation) {Remove-Item -Path $ReportDegradation}
+
 $Degradation | Select-Object -Property `
-    'PC',`
+    'HostName',`
     'Model',`
-    'SerNo',`
+    'SerialNumber',`
     'ScanDate',`
     @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
     @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
@@ -172,19 +200,24 @@ $Degradation | Select-Object -Property `
     @{Expression = {$_.'198'};Name='198 (Offline) Uncorrectable Sector Count'},`
     @{Expression = {$_.'200'};Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
 | Sort-Object -Property `
-    @{Expression = "PC"; Descending = $false}, `
+    @{Expression = "HostName"; Descending = $false}, `
     @{Expression = "5 Reallocated Sectors Count"; Descending = $false}, `
     @{Expression = "ScanDate"; Descending = $false} `
 | Export-Csv -NoTypeInformation -Path $ReportDegradation
+
 #endregion
 
+
 #region  # отчёт Stable
+
 $ReportStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
+
 if (Test-Path -Path $ReportStable) {Remove-Item -Path $ReportStable}
+
 $Stable | Select-Object -Property `
-    'PC',`
+    'HostName',`
     'Model',`
-    'SerNo',`
+    'SerialNumber',`
     'ScanDate',`
     @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
     @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
@@ -201,11 +234,32 @@ $Stable | Select-Object -Property `
     @{Expression = '198 (Offline) Uncorrectable Sector Count'; Descending = $True},`
     @{Expression = '200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'; Descending = $True} `
 | Export-Csv -NoTypeInformation -Path $ReportStable
+
 #endregion
 
+
 #region  # КОНЕЦ
-# замер времени выполнения скрипта
-$TimeStart += Get-Date
-$ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
-Write-Host "execution time is" $ExecTime "second(s)"
+
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): executed' -ForegroundColor  Green
+$WatchDogTimer.Stop()  # $WatchDogTimer.Elapsed.TotalSeconds
+
+#endregion
+
+
+#region  # читаем WMI-отчёты из файлов
+<#foreach ($f in $WMIFiles) {
+    foreach ($HardDrive in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
+        $Disk = (New-Object PSObject -Property @{
+            ScanDate = $HardDrive.ScanDate
+            HostName       = $HardDrive.HostName
+            Model    = $HardDrive.Model
+            SerialNumber    = Convert-hex2txt -wmisn ([string] $HardDrive.SerialNumber.Trim())
+            })
+        foreach ($atr in Convert-WMIArrays -data $HardDrive.WMIData -thresh $HardDrive.WMIThresholds) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
+            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
+            catch {Write-Host "DUPLICATE: '$($HardDrive.HostName)' in '$($f.Name)'" -ForegroundColor Red}
+        }
+        $AllInfo += $Disk
+    }
+}#>
 #endregion

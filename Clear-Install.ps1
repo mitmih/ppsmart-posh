@@ -6,12 +6,13 @@
 
 .DESCRIPTION
     ПОСЛЕ ПОДТВЕРЖДЕНИЯ скрипт:
-    удалит ВСЕ старые данные
-    скачает необходимые версии библиотек System.Data.SQLite
-    установит их в папки x32 и x64
-    инициализирует БД
-    подготовит папки input и output
-    подготовит пример входного файла ./input/example.csv
+        УДАЛИТ ВСЕ прежние результаты работы - файл базы данных ppsmart-posh.db, папки input со списком компьютеров и output с csv-результатами сканирований, файлы библиотек System.Data.SQLite
+
+        скачает необходимые версии библиотек System.Data.SQLite и установит их в папки x32 и x64
+
+        инициализирует новую базу данных
+
+        подготовит папки input и output и пример входного файла ./input/example.csv
 
 .EXAMPLE
     ./Clear-Install.ps1
@@ -21,11 +22,11 @@
         https://github.com/mitmih/ppsmart-posh
 
 .LINK
-    System.Data.SQLite downloads page
+    страница загрузки System.Data.SQLite
         https://system.data.sqlite.org/index.html/doc/trunk/www/downloads.wiki
 
 .LINK
-    some examples
+    примеры работы с System.Data.SQLite
         https://social.technet.microsoft.com/wiki/contents/articles/30562.powershell-accessing-sqlite-databases.aspx
 
 .NOTES
@@ -158,10 +159,7 @@ CREATE TABLE `Disk` (
 
 CREATE TABLE `Host` (
 	`ID`	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	`HostName`	TEXT NOT NULL UNIQUE,
-	`LastScan`	TEXT DEFAULT 0,
-	`Ping`	INTEGER DEFAULT 0,
-	`WMIInfo`	INTEGER DEFAULT 0
+	`HostName`	TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE `Scan` (
