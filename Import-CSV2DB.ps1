@@ -1,4 +1,4 @@
-#requires -version 3  # требуемая версия PowerShell
+п»ї#requires -version 3  # С‚СЂРµР±СѓРµРјР°СЏ РІРµСЂСЃРёСЏ PowerShell
 
 <#
 .SYNOPSIS
@@ -29,25 +29,25 @@ param
     [string] $csvDir = 'output'
 )
 
-#region  # НАЧАЛО
+#region  # РќРђР§РђР›Рћ
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+$TimeStart = @(Get-Date) # Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
-Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+Set-Location $RootDir  # Р»РѕРєР°Р»СЊРЅР°СЏ РєРѕСЂРЅРµРІР°СЏ РїР°РїРєР° "./" = С‚РµРєСѓС‰Р°СЏ РґРёСЂРµРєС‚РѕСЂРёСЏ СЃРєСЂРёРїС‚Р°
 #endregion
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose  # РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРѕРґСѓР»СЊ СЃ С„СѓРЅРєС†РёСЏРјРё
 
 $WMIFiles = Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath $csvDir) -Filter '*drives.csv' -Recurse
 
-#region заполним словари из базы
+#region Р·Р°РїРѕР»РЅРёРј СЃР»РѕРІР°СЂРё РёР· Р±Р°Р·С‹
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
 #endregion
 
 $p2 = Measure-Command {
-#region перенос списка хостов из CSV-файлов в SQLite БД
+#region РїРµСЂРµРЅРѕСЃ СЃРїРёСЃРєР° С…РѕСЃС‚РѕРІ РёР· CSV-С„Р°Р№Р»РѕРІ РІ SQLite Р‘Р”
 foreach ($f in Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath 'input') -Filter '*.csv' -Recurse)
 {
     foreach ($line in Import-Csv $f.FullName)
@@ -63,7 +63,7 @@ foreach ($f in Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath 'input')
 } | select -ExpandProperty TotalSeconds
 
 $p3 = Measure-Command {
-#region перенос результатов сканирований из CSV-файлов в SQLite БД
+#region РїРµСЂРµРЅРѕСЃ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ СЃРєР°РЅРёСЂРѕРІР°РЅРёР№ РёР· CSV-С„Р°Р№Р»РѕРІ РІ SQLite Р‘Р”
 foreach ($f in $WMIFiles) {
     foreach ($Scan in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
         # Disk
@@ -75,7 +75,7 @@ foreach ($f in $WMIFiles) {
         }
 
         # Host
-        if ($HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
+        if ($HostID.ContainsKey($Scan.HostName))  # РµСЃР»Рё РІ С‚Р°Р±Р»РёС†Рµ СЃ РєРѕРјРїСЊСЋС‚РµСЂР°РјРё СѓР¶Рµ РµСЃС‚СЊ Р·Р°РїРёСЃСЊ
         {  # update record
             $hID = Add-DBHost -obj $Scan -id $HostID[$Scan.HostName]
         }
@@ -91,13 +91,13 @@ foreach ($f in $WMIFiles) {
 }  #endregion
 } | select -ExpandProperty TotalSeconds
 
-#region  # КОНЕЦ
-# замер времени выполнения скрипта
+#region  # РљРћРќР•Р¦
+# Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"
 #endregion
 
-# Write-Host -ForegroundColor Green $p1, 'region заполним словари из базы'
-Write-Host -ForegroundColor Green $p2, 'region перенос списка хостов из CSV-файлов в SQLite БД'
-Write-Host -ForegroundColor Green $p3, 'region перенос результатов сканирований из CSV-файлов в SQLite БД'
+# Write-Host -ForegroundColor Green $p1, 'region Р·Р°РїРѕР»РЅРёРј СЃР»РѕРІР°СЂРё РёР· Р±Р°Р·С‹'
+Write-Host -ForegroundColor Green $p2, 'region РїРµСЂРµРЅРѕСЃ СЃРїРёСЃРєР° С…РѕСЃС‚РѕРІ РёР· CSV-С„Р°Р№Р»РѕРІ РІ SQLite Р‘Р”'
+Write-Host -ForegroundColor Green $p3, 'region РїРµСЂРµРЅРѕСЃ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ СЃРєР°РЅРёСЂРѕРІР°РЅРёР№ РёР· CSV-С„Р°Р№Р»РѕРІ РІ SQLite Р‘Р”'

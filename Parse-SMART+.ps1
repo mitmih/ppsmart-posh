@@ -1,33 +1,33 @@
-#requires -version 3  # требуемая версия PowerShell
+п»ї#requires -version 3  # С‚СЂРµР±СѓРµРјР°СЏ РІРµСЂСЃРёСЏ PowerShell
 
 <#
 .SYNOPSIS
-    расшифровывает и обобщает результаты .\Get-WMISMART.ps1
+    СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµС‚ Рё РѕР±РѕР±С‰Р°РµС‚ СЂРµР·СѓР»СЊС‚Р°С‚С‹ .\Get-WMISMART.ps1
 
 .DESCRIPTION
-    сценарий расшифровывает "сырые" S.M.A.R.T. данные из отчётов .\Get-WMISMART.ps1
-    формирует два сводных отчёта:
-        _SMART_STABLE.csv - стабильные диски, состояние не меняется от отчёта к отчёту
-        _SMART_DEGRADATION.csv - диски, с растущим значением переназначенных секторов
+    СЃС†РµРЅР°СЂРёР№ СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµС‚ "СЃС‹СЂС‹Рµ" S.M.A.R.T. РґР°РЅРЅС‹Рµ РёР· РѕС‚С‡С‘С‚РѕРІ .\Get-WMISMART.ps1
+    С„РѕСЂРјРёСЂСѓРµС‚ РґРІР° СЃРІРѕРґРЅС‹С… РѕС‚С‡С‘С‚Р°:
+        _SMART_STABLE.csv - СЃС‚Р°Р±РёР»СЊРЅС‹Рµ РґРёСЃРєРё, СЃРѕСЃС‚РѕСЏРЅРёРµ РЅРµ РјРµРЅСЏРµС‚СЃСЏ РѕС‚ РѕС‚С‡С‘С‚Р° Рє РѕС‚С‡С‘С‚Сѓ
+        _SMART_DEGRADATION.csv - РґРёСЃРєРё, СЃ СЂР°СЃС‚СѓС‰РёРј Р·РЅР°С‡РµРЅРёРµРј РїРµСЂРµРЅР°Р·РЅР°С‡РµРЅРЅС‹С… СЃРµРєС‚РѕСЂРѕРІ
 
 .INPUTS
-    папка с отчётами по отсканированным жёстким дискам
+    РїР°РїРєР° СЃ РѕС‚С‡С‘С‚Р°РјРё РїРѕ РѕС‚СЃРєР°РЅРёСЂРѕРІР°РЅРЅС‹Рј Р¶С‘СЃС‚РєРёРј РґРёСЃРєР°Рј
 
 .OUTPUTS
-    отчёт с подробными атрибутами S.M.A.R.T.
+    РѕС‚С‡С‘С‚ СЃ РїРѕРґСЂРѕР±РЅС‹РјРё Р°С‚СЂРёР±СѓС‚Р°РјРё S.M.A.R.T.
 
 .PARAMETER ReportDir
-    папка с результатами работы .\Get-WMISMART.ps1
+    РїР°РїРєР° СЃ СЂРµР·СѓР»СЊС‚Р°С‚Р°РјРё СЂР°Р±РѕС‚С‹ .\Get-WMISMART.ps1
 
 .EXAMPLE
     .\Parse-SMART.ps1 .\output
-        получить S.M.A.R.T. атрибуты дисков локального компьютера
+        РїРѕР»СѓС‡РёС‚СЊ S.M.A.R.T. Р°С‚СЂРёР±СѓС‚С‹ РґРёСЃРєРѕРІ Р»РѕРєР°Р»СЊРЅРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР°
 
 .LINK
     github-page
         https://github.com/mitmih/ppsmart-posh
 
-    интерпретация атрибутов
+    РёРЅС‚РµСЂРїСЂРµС‚Р°С†РёСЏ Р°С‚СЂРёР±СѓС‚РѕРІ
         https://3dnews.ru/618813
         http://www.ixbt.com/storage/hdd-smart-testing.shtml
         https://www.opennet.ru/base/sys/smart_hdd_mon.txt.html
@@ -43,39 +43,39 @@ param
      [string] $ReportDir = '.\output'  #
 )
 
-#region  # НАЧАЛО
+#region  # РќРђР§РђР›Рћ
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+$TimeStart = @(Get-Date) # Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
-Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+Set-Location $RootDir  # Р»РѕРєР°Р»СЊРЅР°СЏ РєРѕСЂРЅРµРІР°СЏ РїР°РїРєР° "./" = С‚РµРєСѓС‰Р°СЏ РґРёСЂРµРєС‚РѕСЂРёСЏ СЃРєСЂРёРїС‚Р°
 #endregion
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose  # РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРѕРґСѓР»СЊ СЃ С„СѓРЅРєС†РёСЏРјРё
 
-$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # отчёты по дискам
-$AllInfo = @()  # полная инфа по всем дискам из всех отчётов
-$Degradation = @()  # деградация по 5-му атрибуту (remap)
-$Stable = @()  # стабильные, без деградации по 5-му атрибуту (remap)
+$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # РѕС‚С‡С‘С‚С‹ РїРѕ РґРёСЃРєР°Рј
+$AllInfo = @()  # РїРѕР»РЅР°СЏ РёРЅС„Р° РїРѕ РІСЃРµРј РґРёСЃРєР°Рј РёР· РІСЃРµС… РѕС‚С‡С‘С‚РѕРІ
+$Degradation = @()  # РґРµРіСЂР°РґР°С†РёСЏ РїРѕ 5-РјСѓ Р°С‚СЂРёР±СѓС‚Сѓ (remap)
+$Stable = @()  # СЃС‚Р°Р±РёР»СЊРЅС‹Рµ, Р±РµР· РґРµРіСЂР°РґР°С†РёРё РїРѕ 5-РјСѓ Р°С‚СЂРёР±СѓС‚Сѓ (remap)
 
-#region  # читаем WMI-отчёты из БД
-# проверяем битность среды выполнения для подключения подходящей библиотеки
+#region  # С‡РёС‚Р°РµРј WMI-РѕС‚С‡С‘С‚С‹ РёР· Р‘Р”
+# РїСЂРѕРІРµСЂСЏРµРј Р±РёС‚РЅРѕСЃС‚СЊ СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РїРѕРґС…РѕРґСЏС‰РµР№ Р±РёР±Р»РёРѕС‚РµРєРё
 if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
 elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
 else {Write-Host 'Hmmm... not 32 or 64 bit...'}
 
-# подключаем библиотеку для работы с sqlite
+# РїРѕРґРєР»СЋС‡Р°РµРј Р±РёР±Р»РёРѕС‚РµРєСѓ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ sqlite
 try {Add-Type -Path $sqlite -ErrorAction Stop}
 catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
 
-$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
+$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # РїСѓС‚СЊ Рє Р‘Р”
 
-# открываем соединение с БД
+# РѕС‚РєСЂС‹РІР°РµРј СЃРѕРµРґРёРЅРµРЅРёРµ СЃ Р‘Р”
 $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
 $con.ConnectionString = "Data Source=$db"
 $con.Open()
 
-# запрашиваем результаты сканов
+# Р·Р°РїСЂР°С€РёРІР°РµРј СЂРµР·СѓР»СЊС‚Р°С‚С‹ СЃРєР°РЅРѕРІ
 $sql = $con.CreateCommand()
 $sql.CommandText = @'
 SELECT
@@ -99,7 +99,7 @@ $sql.Dispose()
 $con.Close()
 
 Measure-Command {###########################################
-# обрабатываем результаты сканов $data.Tables.Rows.Count
+# РѕР±СЂР°Р±Р°С‚С‹РІР°РµРј СЂРµР·СѓР»СЊС‚Р°С‚С‹ СЃРєР°РЅРѕРІ $data.Tables.Rows.Count
 foreach ($hd in $data.Tables.Rows) {
     $Disk = (New-Object PSObject -Property @{
         ScanDate = $hd.ScanDate
@@ -108,8 +108,8 @@ foreach ($hd in $data.Tables.Rows) {
         SerNo    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
 
-    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)})) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-        try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
+    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)})) {  # СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµРј Р°С‚СЂРёР±СѓС‚С‹ Рё РїРѕ-РѕРґРЅРѕРјСѓ РґРѕР±Р°РІР»СЏРµРј Рє РѕР±СЉРµРєС‚Сѓ $Disk
+        try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # РЅР° СЃР»СѓС‡Р°Р№ РґСѓР±Р»РёРєР°С‚РѕРІ РІ РѕС‚С‡С‘С‚Рµ
         catch {Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red}
     }
     $AllInfo += $Disk
@@ -117,7 +117,7 @@ foreach ($hd in $data.Tables.Rows) {
 } | select -ExpandProperty TotalSeconds ###########################################
 #endregion
 
-#region  # читаем WMI-отчёты из файлов
+#region  # С‡РёС‚Р°РµРј WMI-РѕС‚С‡С‘С‚С‹ РёР· С„Р°Р№Р»РѕРІ
 <#foreach ($f in $WMIFiles) {
     foreach ($HardDrive in Import-Csv $f.FullName) {  # "ScanDate","HostName","SerialNumber","Model","Size","InterfaceType","MediaType","DeviceID","PNPDeviceID","WMIData","WMIThresholds","WMIStatus"
         $Disk = (New-Object PSObject -Property @{
@@ -126,8 +126,8 @@ foreach ($hd in $data.Tables.Rows) {
             Model    = $HardDrive.Model
             SerNo    = Convert-hex2txt -wmisn ([string] $HardDrive.SerialNumber.Trim())
             })
-        foreach ($atr in Convert-WMIArrays -data $HardDrive.WMIData -thresh $HardDrive.WMIThresholds) {  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # на случай дубликатов в отчёте
+        foreach ($atr in Convert-WMIArrays -data $HardDrive.WMIData -thresh $HardDrive.WMIThresholds) {  # СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµРј Р°С‚СЂРёР±СѓС‚С‹ Рё РїРѕ-РѕРґРЅРѕРјСѓ РґРѕР±Р°РІР»СЏРµРј Рє РѕР±СЉРµРєС‚Сѓ $Disk
+            try {$Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop}  # РЅР° СЃР»СѓС‡Р°Р№ РґСѓР±Р»РёРєР°С‚РѕРІ РІ РѕС‚С‡С‘С‚Рµ
             catch {Write-Host "DUPLICATE: '$($HardDrive.HostName)' in '$($f.Name)'" -ForegroundColor Red}
         }
         $AllInfo += $Disk
@@ -135,13 +135,13 @@ foreach ($hd in $data.Tables.Rows) {
 }#>
 #endregion
 
-#region  # поиск деградаций по 5-му атрибуту
+#region  # РїРѕРёСЃРє РґРµРіСЂР°РґР°С†РёР№ РїРѕ 5-РјСѓ Р°С‚СЂРёР±СѓС‚Сѓ
 foreach ($g in $AllInfo | Sort-Object -Property PC,ScanDate | Group-Object -Property SerNo) {
     $g_ex = $g | Select-Object -ExpandProperty Group
     $g_5 = $g_ex | Group-Object -Property '5'
 
-    # если группа 'SerNo' > группы по '5', это деградация по 'remap'
-    # if ($g.Count -gt 1) {"`v", $g, $g_5} # для наглядности можно включить вывод в консоль обеих групп
+    # РµСЃР»Рё РіСЂСѓРїРїР° 'SerNo' > РіСЂСѓРїРїС‹ РїРѕ '5', СЌС‚Рѕ РґРµРіСЂР°РґР°С†РёСЏ РїРѕ 'remap'
+    # if ($g.Count -gt 1) {"`v", $g, $g_5} # РґР»СЏ РЅР°РіР»СЏРґРЅРѕСЃС‚Рё РјРѕР¶РЅРѕ РІРєР»СЋС‡РёС‚СЊ РІС‹РІРѕРґ РІ РєРѕРЅСЃРѕР»СЊ РѕР±РµРёС… РіСЂСѓРїРї
     if ($g.Count -eq $g_5.Count) {
         $Stable += $g_ex | Select-Object -Last 1
         # Write-Host ($g_ex | Select-Object -Property 'PC' -Unique).PC -ForegroundColor Green
@@ -156,7 +156,7 @@ foreach ($g in $AllInfo | Sort-Object -Property PC,ScanDate | Group-Object -Prop
 }
 #endregion#>
 
-#region  # отчёт Degradation
+#region  # РѕС‚С‡С‘С‚ Degradation
 $ReportDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
 if (Test-Path -Path $ReportDegradation) {Remove-Item -Path $ReportDegradation}
 $Degradation | Select-Object -Property `
@@ -178,7 +178,7 @@ $Degradation | Select-Object -Property `
 | Export-Csv -NoTypeInformation -Path $ReportDegradation
 #endregion
 
-#region  # отчёт Stable
+#region  # РѕС‚С‡С‘С‚ Stable
 $ReportStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
 if (Test-Path -Path $ReportStable) {Remove-Item -Path $ReportStable}
 $Stable | Select-Object -Property `
@@ -203,8 +203,8 @@ $Stable | Select-Object -Property `
 | Export-Csv -NoTypeInformation -Path $ReportStable
 #endregion
 
-#region  # КОНЕЦ
-# замер времени выполнения скрипта
+#region  # РљРћРќР•Р¦
+# Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $TimeStart += Get-Date
 $ExecTime = [System.Math]::Round($( $TimeStart[-1] - $TimeStart[0] ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"

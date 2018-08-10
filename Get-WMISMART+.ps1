@@ -1,63 +1,63 @@
-#requires -version 3  # требуемая версия PowerShell
+п»ї#requires -version 3  # С‚СЂРµР±СѓРµРјР°СЏ РІРµСЂСЃРёСЏ PowerShell
 
 <#
 .SYNOPSIS
-    сценарий в многопоточном режиме читает из WMI S.M.A.R.T. данные жёстких дисков указанного компьютера(-ов) и сохраняет отчёт в csv-формате
+    СЃС†РµРЅР°СЂРёР№ РІ РјРЅРѕРіРѕРїРѕС‚РѕС‡РЅРѕРј СЂРµР¶РёРјРµ С‡РёС‚Р°РµС‚ РёР· WMI S.M.A.R.T. РґР°РЅРЅС‹Рµ Р¶С‘СЃС‚РєРёС… РґРёСЃРєРѕРІ СѓРєР°Р·Р°РЅРЅРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР°(-РѕРІ) Рё СЃРѕС…СЂР°РЅСЏРµС‚ РѕС‚С‡С‘С‚ РІ csv-С„РѕСЂРјР°С‚Рµ
 
 .DESCRIPTION
-    для корректной работы сценарий необходимо запускать из-под УЗ администратора целевого компьютера
+    РґР»СЏ РєРѕСЂСЂРµРєС‚РЅРѕР№ СЂР°Р±РѕС‚С‹ СЃС†РµРЅР°СЂРёР№ РЅРµРѕР±С…РѕРґРёРјРѕ Р·Р°РїСѓСЃРєР°С‚СЊ РёР·-РїРѕРґ РЈР— Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР° С†РµР»РµРІРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР°
 
-    сценарий:
-        сканирует одиночный хост либо список машин
-        получает через WMI доступные S.M.A.R.T.-данные жёстких дисков
-        сохраняет отчёт в '.\output\yyyy-MM-dd_HH-mm $inp drives.csv'
+    СЃС†РµРЅР°СЂРёР№:
+        СЃРєР°РЅРёСЂСѓРµС‚ РѕРґРёРЅРѕС‡РЅС‹Р№ С…РѕСЃС‚ Р»РёР±Рѕ СЃРїРёСЃРѕРє РјР°С€РёРЅ
+        РїРѕР»СѓС‡Р°РµС‚ С‡РµСЂРµР· WMI РґРѕСЃС‚СѓРїРЅС‹Рµ S.M.A.R.T.-РґР°РЅРЅС‹Рµ Р¶С‘СЃС‚РєРёС… РґРёСЃРєРѕРІ
+        СЃРѕС…СЂР°РЅСЏРµС‚ РѕС‚С‡С‘С‚ РІ '.\output\yyyy-MM-dd_HH-mm $inp drives.csv'
 
 .INPUTS
-    имя компьютера в формате "mylaptop"
-        или
-    csv-файл списка компьютеров
-    ожидаемый формат файла, первая строка содержит заголовки
+    РёРјСЏ РєРѕРјРїСЊСЋС‚РµСЂР° РІ С„РѕСЂРјР°С‚Рµ "mylaptop"
+        РёР»Рё
+    csv-С„Р°Р№Р» СЃРїРёСЃРєР° РєРѕРјРїСЊСЋС‚РµСЂРѕРІ
+    РѕР¶РёРґР°РµРјС‹Р№ С„РѕСЂРјР°С‚ С„Р°Р№Р»Р°, РїРµСЂРІР°СЏ СЃС‚СЂРѕРєР° СЃРѕРґРµСЂР¶РёС‚ Р·Р°РіРѕР»РѕРІРєРё
         "HostName"
         "MyHomePC"
         "laptop"
-    коэффициент - кол-во потоков, которые будут запущены на каждом логическом ядре
+    РєРѕСЌС„С„РёС†РёРµРЅС‚ - РєРѕР»-РІРѕ РїРѕС‚РѕРєРѕРІ, РєРѕС‚РѕСЂС‹Рµ Р±СѓРґСѓС‚ Р·Р°РїСѓС‰РµРЅС‹ РЅР° РєР°Р¶РґРѕРј Р»РѕРіРёС‡РµСЃРєРѕРј СЏРґСЂРµ
 
-    в обязательном поле "HostName" указываются имена компьютеров
-    поле "LastScan" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
+    РІ РѕР±СЏР·Р°С‚РµР»СЊРЅРѕРј РїРѕР»Рµ "HostName" СѓРєР°Р·С‹РІР°СЋС‚СЃСЏ РёРјРµРЅР° РєРѕРјРїСЊСЋС‚РµСЂРѕРІ
+    РїРѕР»Рµ "LastScan" РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј, РІ РЅРµРіРѕ РїРѕ РѕРєРѕРЅС‡Р°РЅРёРё СЂР°Р±РѕС‚С‹ СЃРєСЂРёРїС‚Р° Р±СѓРґРµС‚ Р·Р°РїРёСЃР°С‚СЊ on-line/off-line СЃС‚Р°С‚СѓСЃ РєРѕРјРїСЊСЋС‚РµСЂР°
 
 .OUTPUTS
-    csv-файл с "сырыми" S.M.A.R.T.-данными
+    csv-С„Р°Р№Р» СЃ "СЃС‹СЂС‹РјРё" S.M.A.R.T.-РґР°РЅРЅС‹РјРё
 
 .PARAMETER Inp
-    имя компьютера или путь к csv-файлу списка компьютеров
+    РёРјСЏ РєРѕРјРїСЊСЋС‚РµСЂР° РёР»Рё РїСѓС‚СЊ Рє csv-С„Р°Р№Р»Сѓ СЃРїРёСЃРєР° РєРѕРјРїСЊСЋС‚РµСЂРѕРІ
 
 .PARAMETER Out
-    путь к файлу отчёта
+    РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ РѕС‚С‡С‘С‚Р°
 
 .PARAMETER k
-    кол-во потоков на логическое ядро, опытным путём на i5 оптимально k=35: минимальное время без ошибок нехватки памяти
+    РєРѕР»-РІРѕ РїРѕС‚РѕРєРѕРІ РЅР° Р»РѕРіРёС‡РµСЃРєРѕРµ СЏРґСЂРѕ, РѕРїС‹С‚РЅС‹Рј РїСѓС‚С‘Рј РЅР° i5 РѕРїС‚РёРјР°Р»СЊРЅРѕ k=35: РјРёРЅРёРјР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ Р±РµР· РѕС€РёР±РѕРє РЅРµС…РІР°С‚РєРё РїР°РјСЏС‚Рё
 
 .PARAMETER t
-    пауза (в секундах) ожидания завершения потоков перед их повторной проверкой. Необходимо для отсева потоков, "зависших" на Get-WmiObject
-    таймаут (в минутах) для выхода из while-цикла сбора результатов потоков
+    РїР°СѓР·Р° (РІ СЃРµРєСѓРЅРґР°С…) РѕР¶РёРґР°РЅРёСЏ Р·Р°РІРµСЂС€РµРЅРёСЏ РїРѕС‚РѕРєРѕРІ РїРµСЂРµРґ РёС… РїРѕРІС‚РѕСЂРЅРѕР№ РїСЂРѕРІРµСЂРєРѕР№. РќРµРѕР±С…РѕРґРёРјРѕ РґР»СЏ РѕС‚СЃРµРІР° РїРѕС‚РѕРєРѕРІ, "Р·Р°РІРёСЃС€РёС…" РЅР° Get-WmiObject
+    С‚Р°Р№РјР°СѓС‚ (РІ РјРёРЅСѓС‚Р°С…) РґР»СЏ РІС‹С…РѕРґР° РёР· while-С†РёРєР»Р° СЃР±РѕСЂР° СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РїРѕС‚РѕРєРѕРІ
 
 .EXAMPLE
     .\Get-WMISMART.ps1 $env:COMPUTERNAME
-        получить S.M.A.R.T. атрибуты дисков локального компьютера
+        РїРѕР»СѓС‡РёС‚СЊ S.M.A.R.T. Р°С‚СЂРёР±СѓС‚С‹ РґРёСЃРєРѕРІ Р»РѕРєР°Р»СЊРЅРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР°
 
 .EXAMPLE
     .\Get-WMISMART.ps1 HOST_NAME
-        получить S.M.A.R.T. атрибуты компьютера HOST_NAME
+        РїРѕР»СѓС‡РёС‚СЊ S.M.A.R.T. Р°С‚СЂРёР±СѓС‚С‹ РєРѕРјРїСЊСЋС‚РµСЂР° HOST_NAME
 
 .EXAMPLE
     .\Get-WMISMART.ps1 .\input\example.csv -k 37 -t 13
-        получить S.M.A.R.T. атрибуты дисков компьютеров списка .\input\example.csv, запустить maximum 37 потоков на ядро, пауза в 13 секунд и таймаут 13 минут
+        РїРѕР»СѓС‡РёС‚СЊ S.M.A.R.T. Р°С‚СЂРёР±СѓС‚С‹ РґРёСЃРєРѕРІ РєРѕРјРїСЊСЋС‚РµСЂРѕРІ СЃРїРёСЃРєР° .\input\example.csv, Р·Р°РїСѓСЃС‚РёС‚СЊ maximum 37 РїРѕС‚РѕРєРѕРІ РЅР° СЏРґСЂРѕ, РїР°СѓР·Р° РІ 13 СЃРµРєСѓРЅРґ Рё С‚Р°Р№РјР°СѓС‚ 13 РјРёРЅСѓС‚
 
 .LINK
     github-page
         https://github.com/mitmih/ppsmart-posh
 
-    не очень корректное описание структуры 512-байт массива S.M.A.R.T.: тут написано, что 1й блок начинается сразу с 0го байта, а на самом деле первые два байта означают версию структуры S.M.A.R.T.
+    РЅРµ РѕС‡РµРЅСЊ РєРѕСЂСЂРµРєС‚РЅРѕРµ РѕРїРёСЃР°РЅРёРµ СЃС‚СЂСѓРєС‚СѓСЂС‹ 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° S.M.A.R.T.: С‚СѓС‚ РЅР°РїРёСЃР°РЅРѕ, С‡С‚Рѕ 1Р№ Р±Р»РѕРє РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃСЂР°Р·Сѓ СЃ 0РіРѕ Р±Р°Р№С‚Р°, Р° РЅР° СЃР°РјРѕРј РґРµР»Рµ РїРµСЂРІС‹Рµ РґРІР° Р±Р°Р№С‚Р° РѕР·РЅР°С‡Р°СЋС‚ РІРµСЂСЃРёСЋ СЃС‚СЂСѓРєС‚СѓСЂС‹ S.M.A.R.T.
         https://social.msdn.microsoft.com/Forums/en-US/af01ce5d-b2a6-4442-b229-6bb32033c755/using-wmi-to-get-smart-status-of-a-hard-disk?forum=vbgeneral
 
 .NOTES
@@ -67,42 +67,42 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-#     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
+#     [string] $Inp = "$env:COMPUTERNAME",  # РёРјСЏ С…РѕСЃС‚Р° Р»РёР±Рѕ РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ СЃРїРёСЃРєР° С…РѕСЃС‚РѕРІ
+    [string] $Inp = ".\input\example.csv",  # РёРјСЏ С…РѕСЃС‚Р° Р»РёР±Рѕ РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ СЃРїРёСЃРєР° С…РѕСЃС‚РѕРІ
     [string] $Out = ".\output\$('{0:yyyy-MM-dd}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
     [int]    $k   = 37,
     [int]    $t   = 17  # once again timer
 )
 
 
-#region  # НАЧАЛО
+#region  # РќРђР§РђР›Рћ
 
 $psCmdlet.ParameterSetName | Out-Null
 # Clear-Host
 $WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
-Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
-# [System.Security.Principal.WindowsIdentity]::GetCurrent().Name  # пригодится для set-credentials
+Set-Location $RootDir  # Р»РѕРєР°Р»СЊРЅР°СЏ РєРѕСЂРЅРµРІР°СЏ РїР°РїРєР° "./" = С‚РµРєСѓС‰Р°СЏ РґРёСЂРµРєС‚РѕСЂРёСЏ СЃРєСЂРёРїС‚Р°
+# [System.Security.Principal.WindowsIdentity]::GetCurrent().Name  # РїСЂРёРіРѕРґРёС‚СЃСЏ РґР»СЏ set-credentials
 
 #endregion
 
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose  # РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРѕРґСѓР»СЊ СЃ С„СѓРЅРєС†РёСЏРјРё
 
-if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;LastScan = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;LastScan = "";})}  # РїСЂРѕРІРµСЂСЏРј, С‡С‚Рѕ РІ РїР°СЂР°РјРµС‚СЂР°С… - РёРјСЏ С…РѕСЃС‚Р° РёР»Рё С„Р°Р№Р»-СЃРїРёСЃРѕРє С…РѕСЃС‚РѕРІ
 
-$clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
-if ($clones -ne $null) {Write-Host "'$Inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
+$clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # РїСЂРѕРІРµСЂРєР° РЅР° РґСѓР±Р»РёРєР°С‚С‹
+if ($clones -ne $null) {Write-Host "'$Inp' СЃРѕРґРµСЂР¶РёС‚ РґСѓР±Р»РёРєР°С‚С‹, СЌС‚Рѕ СѓРІРµР»РёС‡РёС‚ РІСЂРµРјСЏ РїРѕР»СѓС‡РµРЅРёСЏ СЂРµР·СѓР»СЊС‚Р°С‚Р°", $clones.HostName -ForegroundColor Red -Separator "`n"}
 
-if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
+if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # РѕС‚С‡С‘С‚ РїРѕ РґРёСЃРєР°Рј
 
 $ComputersOnLine = @()
 $DiskInfo = @()
 
 
-#region Multi-Threading: распараллелим проверку доступности компа по сети
+#region Multi-Threading: СЂР°СЃРїР°СЂР°Р»Р»РµР»РёРј РїСЂРѕРІРµСЂРєСѓ РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё РєРѕРјРїР° РїРѕ СЃРµС‚Рё
 
-#region: инициализация пула
+#region: РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РїСѓР»Р°
 
 $x = $Computers.Count / [int] $env:NUMBER_OF_PROCESSORS
 $max = if (($x + 1) -lt $k) {[int] $env:NUMBER_OF_PROCESSORS * ($x + 1) + 1} else {[int] $env:NUMBER_OF_PROCESSORS * $k}
@@ -114,7 +114,7 @@ $RunSpaces = @()
 #endregion
 
 
-#region: скрипт-блок задания, которое будет выполняться в потоке
+#region: СЃРєСЂРёРїС‚-Р±Р»РѕРє Р·Р°РґР°РЅРёСЏ, РєРѕС‚РѕСЂРѕРµ Р±СѓРґРµС‚ РІС‹РїРѕР»РЅСЏС‚СЊСЃСЏ РІ РїРѕС‚РѕРєРµ
 
 $Payload = {Param ([string] $name = $env:COMPUTERNAME)
 
@@ -127,39 +127,39 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
 
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
 
-        if ($ping)  # при удачном ping получаем данные
+        if ($ping)  # РїСЂРё СѓРґР°С‡РЅРѕРј ping РїРѕР»СѓС‡Р°РµРј РґР°РЅРЅС‹Рµ
         {
             try {$Win32_DiskDrive = Get-WmiObject -ComputerName $name -class Win32_DiskDrive -ErrorAction Stop}
             catch {break}
 
             foreach ($Disk in $Win32_DiskDrive)
             {
-                $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # в wql-запросе запрещены '\', поэтому заменим их на '_' (что означает "один любой символ"), см. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
+                $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # РІ wql-Р·Р°РїСЂРѕСЃРµ Р·Р°РїСЂРµС‰РµРЅС‹ '\', РїРѕСЌС‚РѕРјСѓ Р·Р°РјРµРЅРёРј РёС… РЅР° '_' (С‡С‚Рѕ РѕР·РЅР°С‡Р°РµС‚ "РѕРґРёРЅ Р»СЋР±РѕР№ СЃРёРјРІРѕР»"), СЃРј. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
 
-                # смарт-атрибуты, флаги
+                # СЃРјР°СЂС‚-Р°С‚СЂРёР±СѓС‚С‹, С„Р»Р°РіРё
                 try {$WMIData = (Get-WmiObject -ComputerName $name -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific}
                 catch {$WMIData = @()}
 
                 if ($WMIData.Length -ne 512)
                 {
-                    Write-Host "`t", $Disk.Model, "- в WMI нет данных S.M.A.R.T." -ForegroundColor DarkYellow
+                    Write-Host "`t", $Disk.Model, "- РІ WMI РЅРµС‚ РґР°РЅРЅС‹С… S.M.A.R.T." -ForegroundColor DarkYellow
                     continue
-                }  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
+                }  # РµСЃР»Рё РґР°РЅРЅС‹Рµ РЅРµ РїРѕР»СѓС‡РµРЅС‹, РЅРµ Р±СѓРґРµРј РґС‘СЂРіР°С‚СЊ WMI РµС‰С‘ РґРІР°Р¶РґС‹ РІС…РѕР»РѕСЃС‚СѓСЋ, РїРµСЂРµС…РѕРґ Рє СЃР»РµРґСѓСЋС‰РµРјСѓ РґРёСЃРєСѓ С…РѕСЃС‚Р°
 
-                # пороговые значения
+                # РїРѕСЂРѕРіРѕРІС‹Рµ Р·РЅР°С‡РµРЅРёСЏ
                 try {$WMIThresholds = (Get-WmiObject -ComputerName $name -namespace root\wmi -Class MSStorageDriver_FailurePredictThresholds -Filter $wql -ErrorAction Stop).VendorSpecific}
                 catch {$WMIThresholds = @()}
 
-                # статус диска (Windows OS IMHO)
-                try {$WMIStatus = (Get-WmiObject -ComputerName $name -namespace root\wmi –class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure}  # ИСТИНА (TRUE), если прогнозируется сбой диска. В этом случае нужно немедленно выполнить резервное копирование диска
+                # СЃС‚Р°С‚СѓСЃ РґРёСЃРєР° (Windows OS IMHO)
+                try {$WMIStatus = (Get-WmiObject -ComputerName $name -namespace root\wmi вЂ“class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure}  # РРЎРўРРќРђ (TRUE), РµСЃР»Рё РїСЂРѕРіРЅРѕР·РёСЂСѓРµС‚СЃСЏ СЃР±РѕР№ РґРёСЃРєР°. Р’ СЌС‚РѕРј СЃР»СѓС‡Р°Рµ РЅСѓР¶РЅРѕ РЅРµРјРµРґР»РµРЅРЅРѕ РІС‹РїРѕР»РЅРёС‚СЊ СЂРµР·РµСЂРІРЅРѕРµ РєРѕРїРёСЂРѕРІР°РЅРёРµ РґРёСЃРєР°
                 catch {$WMIStatus = $null}
 
-                # добавляем новый диск в массив отчёта по дискам
+                # РґРѕР±Р°РІР»СЏРµРј РЅРѕРІС‹Р№ РґРёСЃРє РІ РјР°СЃСЃРёРІ РѕС‚С‡С‘С‚Р° РїРѕ РґРёСЃРєР°Рј
                 Import-Module -Name ".\helper.psm1" -verbose
                 $WMIInfo += New-Object psobject -Property @{
                     ScanDate      =          $('{0:yyyy.MM.dd}' -f $(Get-Date))
                     HostName      = [string] $name
-                    SerialNumber  = [string] $Disk.SerialNumber.Trim()  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # не работает импорт модуля в скрипт-блоке
+                    SerialNumber  = [string] $Disk.SerialNumber.Trim()  # Convert-hex2txt -wmisn ([string] $Disk.SerialNumber)  # РЅРµ СЂР°Р±РѕС‚Р°РµС‚ РёРјРїРѕСЂС‚ РјРѕРґСѓР»СЏ РІ СЃРєСЂРёРїС‚-Р±Р»РѕРєРµ
                     Model         = [string] $Disk.Model
                     Size          = [System.Math]::Round($Disk.Size / (1000 * 1000 * 1000),0)
                     InterfaceType = [string] $Disk.InterfaceType
@@ -172,7 +172,7 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
                 }
             }
 
-            break  # и прерываем цикл проверки
+            break  # Рё РїСЂРµСЂС‹РІР°РµРј С†РёРєР» РїСЂРѕРІРµСЂРєРё
         }
     }
 
@@ -190,7 +190,7 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
 #endregion
 
 
-#region: запускаем задание и добавляем потоки в пул
+#region: Р·Р°РїСѓСЃРєР°РµРј Р·Р°РґР°РЅРёРµ Рё РґРѕР±Р°РІР»СЏРµРј РїРѕС‚РѕРєРё РІ РїСѓР»
 
 foreach ($C in $Computers)
 {
@@ -208,22 +208,22 @@ foreach ($C in $Computers)
 #endregion
 
 
-#region: после завершения каждого потока собираем его данные и закрываем, а после завершения всех потоков закрываем пул
+#region: РїРѕСЃР»Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ РєР°Р¶РґРѕРіРѕ РїРѕС‚РѕРєР° СЃРѕР±РёСЂР°РµРј РµРіРѕ РґР°РЅРЅС‹Рµ Рё Р·Р°РєСЂС‹РІР°РµРј, Р° РїРѕСЃР»Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ РІСЃРµС… РїРѕС‚РѕРєРѕРІ Р·Р°РєСЂС‹РІР°РµРј РїСѓР»
 
-$dctCompleted = @{}  # словарь завершенных заданий
-$dctHang = @{}  # незавершённые задания
-$total = $RunSpaces.Count  # общее кол-во потоков
+$dctCompleted = @{}  # СЃР»РѕРІР°СЂСЊ Р·Р°РІРµСЂС€РµРЅРЅС‹С… Р·Р°РґР°РЅРёР№
+$dctHang = @{}  # РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹Рµ Р·Р°РґР°РЅРёСЏ
+$total = $RunSpaces.Count  # РѕР±С‰РµРµ РєРѕР»-РІРѕ РїРѕС‚РѕРєРѕРІ
 
-# в случае локального компьютера поток может завершиться до начала цикла, и чтобы получить данные нужно выполнить его хотя бы один раз
+# РІ СЃР»СѓС‡Р°Рµ Р»РѕРєР°Р»СЊРЅРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР° РїРѕС‚РѕРє РјРѕР¶РµС‚ Р·Р°РІРµСЂС€РёС‚СЊСЃСЏ РґРѕ РЅР°С‡Р°Р»Р° С†РёРєР»Р°, Рё С‡С‚РѕР±С‹ РїРѕР»СѓС‡РёС‚СЊ РґР°РЅРЅС‹Рµ РЅСѓР¶РЅРѕ РІС‹РїРѕР»РЅРёС‚СЊ РµРіРѕ С…РѕС‚СЏ Р±С‹ РѕРґРёРЅ СЂР°Р·
 While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $true}).Count) )
 {
-    $wpCompl   = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных,   ЗАВЕРШЁННЫЕ потоки"
-    $wpNoCompl = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных, НЕЗАВЕРШЁННЫЕ потоки"
+    $wpCompl   = "РџСЂРѕРІРµСЂРєР° РєРѕРјРїСЊСЋС‚РµСЂР° ping'РѕРј Рё СЃР±РѕСЂ S.M.A.R.T. РґР°РЅРЅС‹С…,   Р—РђР’Р•Р РЁРЃРќРќР«Р• РїРѕС‚РѕРєРё"
+    $wpNoCompl = "РџСЂРѕРІРµСЂРєР° РєРѕРјРїСЊСЋС‚РµСЂР° ping'РѕРј Рё СЃР±РѕСЂ S.M.A.R.T. РґР°РЅРЅС‹С…, РќР•Р—РђР’Р•Р РЁРЃРќРќР«Р• РїРѕС‚РѕРєРё"
 
-    $c_true = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $true}  # сначала отфильтруем только завершённые задания
-    $c_true_filtred = $c_true | Where-Object -FilterScript {!$dctCompleted.ContainsKey($_.Pipe.InstanceId.Guid)}  # затем только те, которые ещё не обрабатывали, т.е. которые пока не попали в словарь $dctCompleted
+    $c_true = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $true}  # СЃРЅР°С‡Р°Р»Р° РѕС‚С„РёР»СЊС‚СЂСѓРµРј С‚РѕР»СЊРєРѕ Р·Р°РІРµСЂС€С‘РЅРЅС‹Рµ Р·Р°РґР°РЅРёСЏ
+    $c_true_filtred = $c_true | Where-Object -FilterScript {!$dctCompleted.ContainsKey($_.Pipe.InstanceId.Guid)}  # Р·Р°С‚РµРј С‚РѕР»СЊРєРѕ С‚Рµ, РєРѕС‚РѕСЂС‹Рµ РµС‰С‘ РЅРµ РѕР±СЂР°Р±Р°С‚С‹РІР°Р»Рё, С‚.Рµ. РєРѕС‚РѕСЂС‹Рµ РїРѕРєР° РЅРµ РїРѕРїР°Р»Рё РІ СЃР»РѕРІР°СЂСЊ $dctCompleted
 
-    foreach ($RS in $c_true_filtred)  # цикл по завершённым_факт, который ещё нет в словаре (завершённых_учёт)
+    foreach ($RS in $c_true_filtred)  # С†РёРєР» РїРѕ Р·Р°РІРµСЂС€С‘РЅРЅС‹Рј_С„Р°РєС‚, РєРѕС‚РѕСЂС‹Р№ РµС‰С‘ РЅРµС‚ РІ СЃР»РѕРІР°СЂРµ (Р·Р°РІРµСЂС€С‘РЅРЅС‹С…_СѓС‡С‘С‚)
     {
         $Result = @()
 
@@ -237,9 +237,9 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq 
 
             $dctCompleted[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
 
-            $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
-            Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
-            Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
+            $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ
+            Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РіРѕС‚РѕРІРѕ: $($dctCompleted.Count)"
+            Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РѕСЃС‚Р°Р»РѕСЃСЊ: $p"
 
             if($dctHang.ContainsKey($RS.Pipe.InstanceId.Guid))
             {
@@ -252,12 +252,12 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq 
     # Start-Sleep -Milliseconds 100
     $c_false = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $false}
 
-    foreach($RS in $c_false)  # цикл по незавершённым
+    foreach($RS in $c_false)  # С†РёРєР» РїРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹Рј
     {
-        $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+        $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ
 
-        Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
-        Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
+        Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РіРѕС‚РѕРІРѕ: $($dctCompleted.Count)"
+        Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РѕСЃС‚Р°Р»РѕСЃСЊ: $p"
 
         $dctHang[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
 
@@ -265,40 +265,38 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($RunSpaces.Count -eq 
     }
 
     # Start-Sleep -Milliseconds 100
-    $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+    $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ
 
-Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
+    Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РѕСЃС‚Р°Р»РѕСЃСЊ: $p"
+    Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tРѕСЃС‚Р°Р»РѕСЃСЊ, `$p:",$p -ForegroundColor Yellow
+    Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "РІСЃРµРіРѕ: $total" -CurrentOperation "РіРѕС‚РѕРІРѕ: $($dctCompleted.Count)"
 
-    Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Yellow
-
-Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
-
-    #         кол-во зависших не изменилось                                          И  (завершён хотя бы один И всего хотя бы 2)
+    #         РєРѕР»-РІРѕ Р·Р°РІРёСЃС€РёС… РЅРµ РёР·РјРµРЅРёР»РѕСЃСЊ                                          Р  (Р·Р°РІРµСЂС€С‘РЅ С…РѕС‚СЏ Р±С‹ РѕРґРёРЅ Р РІСЃРµРіРѕ С…РѕС‚СЏ Р±С‹ 2)
     $escape = ($p -eq $dctHang.Count) -and ($total -eq ($dctCompleted.Count + $p)) -and ( $(if ($total -gt $p) {$dctCompleted.Count -gt 0} else {$true}) )
-    #                                   И  всего = завершёнка_учёт + не_завершёнка_факт         ^это^ условие означает что мог быть запущен один поток и он же мог зависнуть
+    #                                   Р  РІСЃРµРіРѕ = Р·Р°РІРµСЂС€С‘РЅРєР°_СѓС‡С‘С‚ + РЅРµ_Р·Р°РІРµСЂС€С‘РЅРєР°_С„Р°РєС‚         ^СЌС‚Рѕ^ СѓСЃР»РѕРІРёРµ РѕР·РЅР°С‡Р°РµС‚ С‡С‚Рѕ РјРѕРі Р±С‹С‚СЊ Р·Р°РїСѓС‰РµРЅ РѕРґРёРЅ РїРѕС‚РѕРє Рё РѕРЅ Р¶Рµ РјРѕРі Р·Р°РІРёСЃРЅСѓС‚СЊ
 
     if ($escape)
     {
-        Start-Sleep -Seconds $t  # пауза чтобы завершить опоздавшие потоки и не ждать лишний раз "зависшие"
+        Start-Sleep -Seconds $t  # РїР°СѓР·Р° С‡С‚РѕР±С‹ Р·Р°РІРµСЂС€РёС‚СЊ РѕРїРѕР·РґР°РІС€РёРµ РїРѕС‚РѕРєРё Рё РЅРµ Р¶РґР°С‚СЊ Р»РёС€РЅРёР№ СЂР°Р· "Р·Р°РІРёСЃС€РёРµ"
 
-        $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+        $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ
 
         $escape = ($p -eq $dctHang.Count) -and ($total -eq ($dctCompleted.Count + $p)) -and ( $(if ($total -gt $p) {$dctCompleted.Count -gt 0} else {$true}) )
 
         if ($escape)
         {
-            Write-Host 'после ', $t, 'сек кол-во незавершённых потоков осталось прежним. Выход из Multi-Threading-цикла...' -ForegroundColor Red
-            Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Magenta
+            Write-Host 'РїРѕСЃР»Рµ ', $t, 'СЃРµРє РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ РѕСЃС‚Р°Р»РѕСЃСЊ РїСЂРµР¶РЅРёРј. Р’С‹С…РѕРґ РёР· Multi-Threading-С†РёРєР»Р°...' -ForegroundColor Red
+            Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tРѕСЃС‚Р°Р»РѕСЃСЊ, `$p:",$p -ForegroundColor Magenta
 
             $RunSpaces | Where-Object -FilterScript {$_.Pipe.InstanceId.Guid -in ($dctHang.Keys)} | foreach {Write-Host $_.Pipe.Streams.Debug, $_.Pipe.Streams.Information, "`t", $_.Pipe.InstanceId.Guid -ForegroundColor Red}
 
-            break  # завершение while-цикла: если кол-во незавершённых потоков после паузы (в секундах) не изменилось, значить они зависли)
+            break  # Р·Р°РІРµСЂС€РµРЅРёРµ while-С†РёРєР»Р°: РµСЃР»Рё РєРѕР»-РІРѕ РЅРµР·Р°РІРµСЂС€С‘РЅРЅС‹С… РїРѕС‚РѕРєРѕРІ РїРѕСЃР»Рµ РїР°СѓР·С‹ (РІ СЃРµРєСѓРЅРґР°С…) РЅРµ РёР·РјРµРЅРёР»РѕСЃСЊ, Р·РЅР°С‡РёС‚СЊ РѕРЅРё Р·Р°РІРёСЃР»Рё)
         }
 
         else
 
         {
-            Write-Host -ForegroundColor Green 'пауза в', $t, 'сек закончилась. Эх раз, ещё раз... :-)'
+            Write-Host -ForegroundColor Green 'РїР°СѓР·Р° РІ', $t, 'СЃРµРє Р·Р°РєРѕРЅС‡РёР»Р°СЃСЊ. Р­С… СЂР°Р·, РµС‰С‘ СЂР°Р·... :-)'
         }
     }
 
@@ -311,11 +309,11 @@ Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Ac
 
     if ($WatchDogTimer.Elapsed.TotalMinutes -gt $t)
     {
-        break  # внештатное завершение while-цикла по таймауту, в минутах
+        break  # РІРЅРµС€С‚Р°С‚РЅРѕРµ Р·Р°РІРµСЂС€РµРЅРёРµ while-С†РёРєР»Р° РїРѕ С‚Р°Р№РјР°СѓС‚Сѓ, РІ РјРёРЅСѓС‚Р°С…
     }
 }
 
-<# нужно завершить "зависшие" потоки (возможно через Job с таймаутом), прежде чем закрывать пул
+<# РЅСѓР¶РЅРѕ Р·Р°РІРµСЂС€РёС‚СЊ "Р·Р°РІРёСЃС€РёРµ" РїРѕС‚РѕРєРё (РІРѕР·РјРѕР¶РЅРѕ С‡РµСЂРµР· Job СЃ С‚Р°Р№РјР°СѓС‚РѕРј), РїСЂРµР¶РґРµ С‡РµРј Р·Р°РєСЂС‹РІР°С‚СЊ РїСѓР»
 foreach($RS in  $RunSpaces | Where-Object -FilterScript {$dctHang.ContainsKey($_.Pipe.InstanceId.Guid)})
 {
     $RS.Pipe.InstanceId.Guid
@@ -335,11 +333,11 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Multi-Threading passe
 #endregion Multi-Threading
 
 
-foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
+foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё РїСЂРёРІРѕРґРёРј СЃРµСЂРёР№РЅС‹Рµ РЅРѕРјРµСЂР° РІ С‡РёС‚Р°РµРјС‹Р№ С„РѕСЂРјР°С‚
 Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): SerialNumber`s converted' -ForegroundColor Cyan
 
 
-#region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
+#region: СЌРєСЃРїРѕСЂС‚С‹:  РѕС‚С‡С‘С‚ РїРѕ РґРёСЃРєР°Рј, РѕР±РЅРѕРІР»РµРЅРёРµ РІС…РѕРґРЅРѕРіРѕ С„Р°Р№Р»Р° (РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё)
 if ($DiskInfo.Count -gt 0)
 {
     $DiskInfo | Select-Object `
@@ -358,7 +356,7 @@ if ($DiskInfo.Count -gt 0)
         | Sort-Object -Property 'HostName' | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
 
 
-    if (Test-Path -Path $Inp)  # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
+    if (Test-Path -Path $Inp)  # РµСЃР»Рё РЅР° РІС…РѕРґ Р±С‹Р» РїРѕРґР°РЅ С„Р°Р№Р» СЃРѕ СЃРїРёСЃРєРѕРј С…РѕСЃС‚РѕРІ, С‚Рѕ СЌРєСЃРїРѕСЂС‚РёСЂСѓРµРј СЌС‚РѕС‚ СЃРїРёСЃРѕРє СЃРѕ СЃС‚Р°С‚СѓСЃР°РјРё РѕРЅ-Р»Р°Р№РЅ\РѕС„С„-Р»Р°Р№РЅ
     {
         $ComputersOnLine += ($Computers | Where-Object -FilterScript {$_.HostName -notin $ComputersOnLine.HostName})  # | Select-Object -Property 'HostName')
         $ComputersOnLine | Select-Object 'HostName' | Sort-Object -Property 'HostName' | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8
@@ -370,7 +368,7 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Export-Csv completed'
 #endregion
 
 
-#region: обновление БД
+#region: РѕР±РЅРѕРІР»РµРЅРёРµ Р‘Р”
 
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
@@ -386,7 +384,7 @@ foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Si
 
 
     # Host
-    if ($HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
+    if ($HostID.ContainsKey($Scan.HostName))  # РµСЃР»Рё РІ С‚Р°Р±Р»РёС†Рµ СЃ РєРѕРјРїСЊСЋС‚РµСЂР°РјРё СѓР¶Рµ РµСЃС‚СЊ Р·Р°РїРёСЃСЊ
     {  # update record
         $hID = Add-DBHost -obj $Scan -id $HostID[$Scan.HostName]
     }
@@ -408,7 +406,7 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): DataBase updated' -Fo
 #endregion
 
 
-#region  # КОНЕЦ
+#region  # РљРћРќР•Р¦
 
 Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): executed' -ForegroundColor  Green
 $WatchDogTimer.Stop()  # $WatchDogTimer.Elapsed.TotalSeconds

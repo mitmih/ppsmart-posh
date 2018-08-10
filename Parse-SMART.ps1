@@ -1,31 +1,31 @@
-#requires -version 3  # требуемая версия PowerShell
+п»ї#requires -version 3  # С‚СЂРµР±СѓРµРјР°СЏ РІРµСЂСЃРёСЏ PowerShell
 
 <#
 .SYNOPSIS
-    расшифровывает отчёты .\Get-WMISMART.ps1
+    СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµС‚ РѕС‚С‡С‘С‚С‹ .\Get-WMISMART.ps1
 
 .DESCRIPTION
-    сценарий расшифровывает "сырые" S.M.A.R.T. данные из отчётов .\Get-WMISMART.ps1
-    по каждому отчёту формирует подробную расшифровку, сколько отчётов - столько расшифровок
+    СЃС†РµРЅР°СЂРёР№ СЂР°СЃС€РёС„СЂРѕРІС‹РІР°РµС‚ "СЃС‹СЂС‹Рµ" S.M.A.R.T. РґР°РЅРЅС‹Рµ РёР· РѕС‚С‡С‘С‚РѕРІ .\Get-WMISMART.ps1
+    РїРѕ РєР°Р¶РґРѕРјСѓ РѕС‚С‡С‘С‚Сѓ С„РѕСЂРјРёСЂСѓРµС‚ РїРѕРґСЂРѕР±РЅСѓСЋ СЂР°СЃС€РёС„СЂРѕРІРєСѓ, СЃРєРѕР»СЊРєРѕ РѕС‚С‡С‘С‚РѕРІ - СЃС‚РѕР»СЊРєРѕ СЂР°СЃС€РёС„СЂРѕРІРѕРє
 
 .INPUTS
-    папка с отчётами по отсканированным жёстким дискам
+    РїР°РїРєР° СЃ РѕС‚С‡С‘С‚Р°РјРё РїРѕ РѕС‚СЃРєР°РЅРёСЂРѕРІР°РЅРЅС‹Рј Р¶С‘СЃС‚РєРёРј РґРёСЃРєР°Рј
 
 .OUTPUTS
-    отчёт с подробными атрибутами S.M.A.R.T.
+    РѕС‚С‡С‘С‚ СЃ РїРѕРґСЂРѕР±РЅС‹РјРё Р°С‚СЂРёР±СѓС‚Р°РјРё S.M.A.R.T.
 
 .PARAMETER ReportDir
-    папка с результатами работы .\Get-WMISMART.ps1
+    РїР°РїРєР° СЃ СЂРµР·СѓР»СЊС‚Р°С‚Р°РјРё СЂР°Р±РѕС‚С‹ .\Get-WMISMART.ps1
 
 .EXAMPLE
     .\Parse-SMART.ps1 .\output
-        получить S.M.A.R.T. атрибуты дисков локального компьютера
+        РїРѕР»СѓС‡РёС‚СЊ S.M.A.R.T. Р°С‚СЂРёР±СѓС‚С‹ РґРёСЃРєРѕРІ Р»РѕРєР°Р»СЊРЅРѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР°
 
 .LINK
     github-page
         https://github.com/mitmih/ppsmart-posh
 
-    интерпретация атрибутов
+    РёРЅС‚РµСЂРїСЂРµС‚Р°С†РёСЏ Р°С‚СЂРёР±СѓС‚РѕРІ
         https://3dnews.ru/618813
         http://www.ixbt.com/storage/hdd-smart-testing.shtml
         https://www.opennet.ru/base/sys/smart_hdd_mon.txt.html
@@ -43,14 +43,14 @@ param
 )
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = Get-Date # замер времени выполнения скрипта
-set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # локальная корневая папка "./" = текущая директория скрипта
+$TimeStart = Get-Date # Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
+set-location "$($MyInvocation.MyCommand.Definition | split-path -parent)"  # Р»РѕРєР°Р»СЊРЅР°СЏ РєРѕСЂРЅРµРІР°СЏ РїР°РїРєР° "./" = С‚РµРєСѓС‰Р°СЏ РґРёСЂРµРєС‚РѕСЂРёСЏ СЃРєСЂРёРїС‚Р°
 
-Import-Module -Name ".\helper.psm1" -verbose  # вспомогательный модуль с функциями
+Import-Module -Name ".\helper.psm1" -verbose  # РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРѕРґСѓР»СЊ СЃ С„СѓРЅРєС†РёСЏРјРё
 
-$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv'  # отчёты по дискам
+$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv'  # РѕС‚С‡С‘С‚С‹ РїРѕ РґРёСЃРєР°Рј
 
-# удалим старые расшифровки, если есть новые отчёты с "сырыми" данными
+# СѓРґР°Р»РёРј СЃС‚Р°СЂС‹Рµ СЂР°СЃС€РёС„СЂРѕРІРєРё, РµСЃР»Рё РµСЃС‚СЊ РЅРѕРІС‹Рµ РѕС‚С‡С‘С‚С‹ СЃ "СЃС‹СЂС‹РјРё" РґР°РЅРЅС‹РјРё
 if ($WMIFiles -ne $null) {foreach ($SmartReportFile in Get-ChildItem -Path $ReportDir -Filter '*smart.csv') {Remove-Item -Path "$ReportDir\$SmartReportFile"}}
 
 foreach ($DrivesReportFile in $WMIFiles) {
@@ -65,9 +65,9 @@ foreach ($DrivesReportFile in $WMIFiles) {
         $AtrInfo | Add-Member -MemberType NoteProperty -Name SerNo     -Value (Convert-hex2txt -wmisn ([string] $disk.SerialNumber.Trim()))  # $disk.SerialNumber
         $AtrInfo | Add-Member -MemberType NoteProperty -Name WMIStatus -Value $disk.WMIStatus
 
-        foreach ($atr in $AtrInfo) {$atr | Add-Member -MemberType NoteProperty -Name saFlagString -Value $(Convert-Flags -flagDec ([System.Convert]::ToInt32($atr.saFlagBin,2)))}  # флаги bin-to-char
+        foreach ($atr in $AtrInfo) {$atr | Add-Member -MemberType NoteProperty -Name saFlagString -Value $(Convert-Flags -flagDec ([System.Convert]::ToInt32($atr.saFlagBin,2)))}  # С„Р»Р°РіРё bin-to-char
 
-        # экспорт расшифровки S.M.A.R.T. диска
+        # СЌРєСЃРїРѕСЂС‚ СЂР°СЃС€РёС„СЂРѕРІРєРё S.M.A.R.T. РґРёСЃРєР°
         $AtrInfo | Select-Object `
         'ScanDate',`
         'PC',`
@@ -90,9 +90,9 @@ foreach ($DrivesReportFile in $WMIFiles) {
         'saFlagString'`
         | Export-Csv -Append -NoTypeInformation -Path $DrivesReportFile.Replace('drives', 'smart')
     }
-    # Remove-Item -Path $DrivesReportFile  # удаляем прочитанный отчёт с "сырыми" данными
+    # Remove-Item -Path $DrivesReportFile  # СѓРґР°Р»СЏРµРј РїСЂРѕС‡РёС‚Р°РЅРЅС‹Р№ РѕС‚С‡С‘С‚ СЃ "СЃС‹СЂС‹РјРё" РґР°РЅРЅС‹РјРё
 }
 
-# замер времени выполнения скрипта
+# Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $ExecTime = [System.Math]::Round($( $(Get-Date) - $TimeStart ).TotalSeconds,1)
 Write-Host "execution time is" $ExecTime "second(s)"

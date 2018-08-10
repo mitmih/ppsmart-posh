@@ -1,17 +1,17 @@
-#requires -version 3  # требуемая версия PowerShell
+п»ї#requires -version 3  # С‚СЂРµР±СѓРµРјР°СЏ РІРµСЂСЃРёСЏ PowerShell
 
 <#
 .SYNOPSIS
-    начальная установка
+    РЅР°С‡Р°Р»СЊРЅР°СЏ СѓСЃС‚Р°РЅРѕРІРєР°
 
 .DESCRIPTION
-    ПОСЛЕ ПОДТВЕРЖДЕНИЯ скрипт:
-    удалит ВСЕ старые данные
-    скачает необходимые версии библиотек System.Data.SQLite
-    установит их в папки x32 и x64
-    инициализирует БД
-    подготовит папки input и output
-    подготовит пример входного файла ./input/example.csv
+    РџРћРЎР›Р• РџРћР”РўР’Р•Р Р–Р”Р•РќРРЇ СЃРєСЂРёРїС‚:
+    СѓРґР°Р»РёС‚ Р’РЎР• СЃС‚Р°СЂС‹Рµ РґР°РЅРЅС‹Рµ
+    СЃРєР°С‡Р°РµС‚ РЅРµРѕР±С…РѕРґРёРјС‹Рµ РІРµСЂСЃРёРё Р±РёР±Р»РёРѕС‚РµРє System.Data.SQLite
+    СѓСЃС‚Р°РЅРѕРІРёС‚ РёС… РІ РїР°РїРєРё x32 Рё x64
+    РёРЅРёС†РёР°Р»РёР·РёСЂСѓРµС‚ Р‘Р”
+    РїРѕРґРіРѕС‚РѕРІРёС‚ РїР°РїРєРё input Рё output
+    РїРѕРґРіРѕС‚РѕРІРёС‚ РїСЂРёРјРµСЂ РІС…РѕРґРЅРѕРіРѕ С„Р°Р№Р»Р° ./input/example.csv
 
 .EXAMPLE
     ./Clear-Install.ps1
@@ -35,12 +35,12 @@
 # first unblock script by right mouse menu and execute
 #   Set-ExecutionPolicy RemoteSigned
 
-#region  # НАЧАЛО
+#region  # РќРђР§РђР›Рћ
 $psCmdlet.ParameterSetName | Out-Null
 Clear-Host
-$TimeStart = @(Get-Date) # замер времени выполнения скрипта
+$TimeStart = @(Get-Date) # Р·Р°РјРµСЂ РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ СЃРєСЂРёРїС‚Р°
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
-Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
+Set-Location $RootDir  # Р»РѕРєР°Р»СЊРЅР°СЏ РєРѕСЂРЅРµРІР°СЏ РїР°РїРєР° "./" = С‚РµРєСѓС‰Р°СЏ РґРёСЂРµРєС‚РѕСЂРёСЏ СЃРєСЂРёРїС‚Р°
 
 $db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'
 $input = Join-Path -Path $RootDir -ChildPath 'input'
@@ -61,8 +61,8 @@ elseif ([IntPtr]::Size -eq 4)  # 32-bit
 else {Write-Host 'can not choose between 32 or 64 bit dll`s'}
 #endregion
 
-#region возможность отменить
-$confirmation = Read-Host "Если вы продолжите, все данные будут очищены`nНажмите y(es) для продолжения..."
+#region РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ РѕС‚РјРµРЅРёС‚СЊ
+$confirmation = Read-Host "Р•СЃР»Рё РІС‹ РїСЂРѕРґРѕР»Р¶РёС‚Рµ, РІСЃРµ РґР°РЅРЅС‹Рµ Р±СѓРґСѓС‚ РѕС‡РёС‰РµРЅС‹`nРќР°Р¶РјРёС‚Рµ y(es) РґР»СЏ РїСЂРѕРґРѕР»Р¶РµРЅРёСЏ..."
 if ($confirmation.ToLower() -notin @('y','yes')) {exit}
 if (Test-Path -Path $db)     {Remove-Item -Path $db              -Force}
 if (Test-Path -Path $input)  {Remove-Item -Path $input  -Recurse -Force}
@@ -74,7 +74,7 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
 
 #region setup SQLite
 
-    #region определяем, какие архивы нужно скачать, в зависимости от $PSVersionTable.CLRVersion
+    #region РѕРїСЂРµРґРµР»СЏРµРј, РєР°РєРёРµ Р°СЂС…РёРІС‹ РЅСѓР¶РЅРѕ СЃРєР°С‡Р°С‚СЊ, РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ $PSVersionTable.CLRVersion
     $links = @{}
     $url = "https://system.data.sqlite.org"  # root-page
     $page = "https://system.data.sqlite.org/index.html/doc/trunk/www/downloads.wiki"  # downloads are listed here
@@ -90,7 +90,7 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
 
     foreach ($k in $links.Keys)
     {
-        #region качаем архивы
+        #region РєР°С‡Р°РµРј Р°СЂС…РёРІС‹
         $url = $links[$k]
         $file = Join-Path -Path $RootDir -ChildPath $links[$k].Split('/')[-1]
 
@@ -101,10 +101,10 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
         }
         #endregion
 
-        # новая папка, соответствует битности библиотек
+        # РЅРѕРІР°СЏ РїР°РїРєР°, СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚ Р±РёС‚РЅРѕСЃС‚Рё Р±РёР±Р»РёРѕС‚РµРє
         if(!(Test-Path -Path (Join-Path -Path $RootDir -ChildPath $k))) {$null = New-Item -ItemType Directory -Path (Join-Path -Path $RootDir -ChildPath $k)}
 
-        #region распаковываем SQLite.Interop.dll и System.Data.SQLite.dll
+        #region СЂР°СЃРїР°РєРѕРІС‹РІР°РµРј SQLite.Interop.dll Рё System.Data.SQLite.dll
         try
         {
             Add-Type -Assembly System.IO.Compression.FileSystem
@@ -122,7 +122,7 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
         }
         #endregion
 
-        #region проверка распаковки библиотек
+        #region РїСЂРѕРІРµСЂРєР° СЂР°СЃРїР°РєРѕРІРєРё Р±РёР±Р»РёРѕС‚РµРє
         $subdir = Join-Path -Path $RootDir -ChildPath $k
         if ((Test-Path (Join-Path -Path $RootDir -ChildPath (Join-Path -Path $k -ChildPath "SQLite.Interop.dll"))) -and
             (Test-Path (Join-Path -Path $RootDir -ChildPath (Join-Path -Path $k -ChildPath "System.Data.SQLite.dll"))))
@@ -185,7 +185,7 @@ $con.Close()
 #endregion
 
 #region input, output
-# новая папка, соответствует битности библиотек
+# РЅРѕРІР°СЏ РїР°РїРєР°, СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚ Р±РёС‚РЅРѕСЃС‚Рё Р±РёР±Р»РёРѕС‚РµРє
 if(!(Test-Path $input))  {$null = New-Item -ItemType Directory -Path $input }
 (New-Object psobject -Property @{HostName = $env:COMPUTERNAME;}) | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
 
