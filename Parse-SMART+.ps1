@@ -40,7 +40,9 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-     [string] $ReportDir = '.\output'  #
+     [string] $ReportDir = 'output',  #
+     [int]    $csv       = 0,
+     [int]    $html      = 1
 )
 
 #region  # НАЧАЛО
@@ -59,13 +61,13 @@ Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогатель�
 #endregion
 
 
-$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # отчёты по дискам
+$WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # массив отчётов по дискам
 
 $AllInfo = @()  # полная инфа по всем дискам из всех отчётов
 
 $Degradation = @()  # деградация по 5-му атрибуту (remap)
 
-$Stable = @()  # стабильные, без деградации по 5-му атрибуту (remap)
+$Stable = @()  # стабильные, без деградации по remap`у
 
 
 #region  # читаем WMI-отчёты из БД
@@ -132,10 +134,11 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
 # $data.Tables.Rows | Select-Object -Property SerialNumber, HostName, ScanDate, @{Name="Model"; Expression = {$_.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')}}
 {
     $Disk = (New-Object PSObject -Property @{
-        ScanDate = $hd.ScanDate
-        HostName       = $hd.HostName
-        Model    = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
-        SerialNumber    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
+        ScanDate     = $hd.ScanDate
+        HostName     = $hd.HostName
+        Model        = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
+        SerialNumber = $hd.SerialNumber
+        Size         = $hd.Size  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
 
 
@@ -197,59 +200,139 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
 #endregion
 
 
-#region  # отчёт Degradation
+#region  # Reports
 
-$ReportDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
+$ReportSelectProperties = @(
+    'HostName',
+    'Model',
+    'SerialNumber',
+    'ScanDate',
+    @{Expression = { $_.Size.ToString() + ' Gb' };   Name='Size'},
+    @{Expression = { $_.'9'.ToString() + ' hours' };   Name='9 Power-On Hours'},
+    @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},
+    @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},
+    @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},
+    @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},
+    @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},
+    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}
+)
 
-if (Test-Path -Path $ReportDegradation) {Remove-Item -Path $ReportDegradation}
+$ReportSortProperties = @(
+    @{Expression = '5 Reallocated Sectors Count'; Descending = $True},
+    @{Expression = '184 End-to-End error / IOEDC'; Descending = $True},
+    @{Expression = '187 Reported Uncorrectable Errors'; Descending = $True},
+    @{Expression = '197 Current Pending Sector Count'; Descending = $True},
+    @{Expression = '198 (Offline) Uncorrectable Sector Count'; Descending = $True},
+    @{Expression = '200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'; Descending = $True}
+)
 
-$Degradation | Select-Object -Property `
-    'HostName',`
-    'Model',`
-    'SerialNumber',`
-    'ScanDate',`
-    @{Expression = { $_.'9' };   Name='9 Power-On Hours'},`
-    @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},`
-    @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},`
-    @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},`
-    @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},`
-    @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},`
-    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
-<#| Sort-Object -Property `
-    @{Expression = "HostName"; Descending = $false}, `
-    @{Expression = "5 Reallocated Sectors Count"; Descending = $false}, `
-    @{Expression = "ScanDate"; Descending = $false} #>`
-| Export-Csv -NoTypeInformation -Path $ReportDegradation
+#region  # CSV отчёт Degradation
+
+if ($csv)
+
+{
+    $csvDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
+
+    if (Test-Path -Path $csvDegradation) {Remove-Item -Path $csvDegradation}
+
+    $Degradation | Select-Object -Property $ReportSelectProperties `
+    <#| Sort-Object -Property `
+        @{Expression = "HostName"; Descending = $false}, `
+        @{Expression = "5 Reallocated Sectors Count"; Descending = $false}, `
+        @{Expression = "ScanDate"; Descending = $false} #> `
+    | Export-Csv -NoTypeInformation -Path $csvDegradation
+
+
+    $csvStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
+
+    if (Test-Path -Path $csvStable) {Remove-Item -Path $csvStable}
+
+    $Stable | Select-Object -Property $ReportSelectProperties `
+    | Sort-Object -Property $ReportSortProperties `
+    | Export-Csv -NoTypeInformation -Path $csvStable
+}
 
 #endregion
 
+#region  # HTML
 
-#region  # отчёт Stable
+if ($html)
 
-$ReportStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
+{
 
-if (Test-Path -Path $ReportStable) {Remove-Item -Path $ReportStable}
+$htmlReport = Join-Path -Path $RootDir -ChildPath (Join-Path -Path $ReportDir -ChildPath 'report.html')
 
-$Stable | Select-Object -Property `
-    'HostName',`
-    'Model',`
-    'SerialNumber',`
-    'ScanDate',`
-    @{Expression = { $_.'9' };   Name='9 Power-On Hours'},`
-    @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},`
-    @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},`
-    @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},`
-    @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},`
-    @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},`
-    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
-| Sort-Object -Property `
-    @{Expression = '5 Reallocated Sectors Count'; Descending = $True},  `
-    @{Expression = '184 End-to-End error / IOEDC'; Descending = $True},`
-    @{Expression = '187 Reported Uncorrectable Errors'; Descending = $True},`
-    @{Expression = '197 Current Pending Sector Count'; Descending = $True},`
-    @{Expression = '198 (Offline) Uncorrectable Sector Count'; Descending = $True},`
-    @{Expression = '200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'; Descending = $True} `
-| Export-Csv -NoTypeInformation -Path $ReportStable
+$htmlStableFrag = $Stable | Where-Object {$_.'5' -gt 0} | Select-Object -Property $ReportSelectProperties `
+    | Sort-Object -Property $ReportSortProperties `
+    |  ConvertTo-HTML -Fragment -PreContent '<h2><p>Stable Disk Info</h2>' -PostContent '<p></p>'
+
+$htmlDegradFrag = $Degradation `
+    | Select-Object -Property $ReportSelectProperties `
+    | ConvertTo-HTML -Fragment -PreContent '<h2><p>Degradation Disk Info</h2>' -PostContent '<p></p>'
+
+$ConvertHtmlParams = @{
+    #'Title' = 'Python & PowerShell S.M.A.R.T. monitoring ToolKit'
+    'Head' = @"
+<h2>report generated: $((Get-Date).ToString())</h2>
+<title>ppsmart-posh</title>
+<style>
+    body {
+        font-family:Calibri;
+        font-size:11pt;
+        color:#1d6195;
+    }
+
+    table {
+        width:96%;
+        margin-left:2%;
+        border-collapse:collapse;
+        text-align: center;
+    }
+
+    td, th {
+        border:0px solid black;
+        border-collapse:collapse;
+    }
+
+    th {
+        background-color:#267dc0;
+        color:white;
+    }
+
+    td {
+        padding: 4px;
+        margin: 0px ;
+        white-space: pre;
+        color: black;
+    }
+
+    tr:nth-child(odd) {background-color: #aad1ee; }
+    tr:nth-child(even) {background-color: #7fb9e6;}
+</style>
+"@
+    'Body' = "$htmlDegradFrag `n$htmlStableFrag"
+    'PreContent'  = '<h3>Python & PowerShell S.M.A.R.T. monitoring ToolKit</h3>'
+    'PostContent' = @'
+<p>Author: Dmitry Mikhaylov
+<p><a href="https://github.com/mitmih/ppsmart-posh">View Project on GitHub</a>
+'@
+#     'CssUri' = 'style.css'
+}
+
+ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
+
+# ConvertTo-Html -Title '123' @ConvertHtmlParams | Out-File $htmlReport
+
+
+Invoke-Item $htmlReport
+
+# $IE=new-object -com internetexplorer.application
+# $IE.navigate2($htmlReport)
+# $IE.visible=$true  #>
+
+}
+
+#endregion
 
 #endregion
 
