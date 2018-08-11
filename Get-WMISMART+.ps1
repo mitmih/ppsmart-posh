@@ -40,6 +40,8 @@
 .PARAMETER t
     пауза (в секундах) ожидания завершения потоков перед их повторной проверкой. Необходимо для отсева потоков, "зависших" на Get-WmiObject
     таймаут (в минутах) для выхода из while-цикла сбора результатов потоков
+    1...3  для локальной машины должно хватить для корректного завершения сканирования
+    7...9+ для списка удалённых компьютеров
 
 .EXAMPLE
     .\Get-WMISMART.ps1 $env:COMPUTERNAME
@@ -68,7 +70,7 @@
 param
 (
     [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-#     [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
+    # [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
     [string] $Out = ".\output\$('{0:yyyy-MM-dd}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
     [int]    $k   = 37,
     [int]    $t   = 1  # once again timer
@@ -403,6 +405,7 @@ foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Si
         $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
                 @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
                 @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
+                #@{Name="Archived"; Expression = {0}},
                 'ScanDate',
                 'WMIData',
                 'WMIThresholds',

@@ -70,6 +70,8 @@ $Stable = @()  # стабильные, без деградации по 5-му �
 
 #region  # читаем WMI-отчёты из БД
 
+#region  # refactor to helper module functions!
+
 # проверяем битность среды выполнения для подключения подходящей библиотеки
 if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
 elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
@@ -81,33 +83,47 @@ catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
 
 $db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
 
-# открываем соединение с БД
-$con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-$con.ConnectionString = "Data Source=$db"
-$con.Open()
+if (Test-Path $db)
 
-# запрашиваем результаты сканов
-$sql = $con.CreateCommand()
-$sql.CommandText = @'
-SELECT
-	Host.HostName,
-	Disk.Model,
-	Disk.SerialNumber,
-	Disk.Size,
-	Scan.ScanDate,
-	Scan.WMIData,
-	Scan.WMIThresholds,
-	Scan.WMIStatus
-FROM `Scan`
-INNER JOIN `Host` ON Scan.HostID = Host.ID
-INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
-ORDER BY Scan.ID;
+{
+    # открываем соединение с БД
+    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+
+    $con.ConnectionString = "Data Source=$db"
+
+    $con.Open()
+
+    # запрашиваем результаты сканов
+    $sql = $con.CreateCommand()
+
+    $sql.CommandText = @'
+    SELECT
+        Host.HostName,
+        Disk.Model,
+        Disk.SerialNumber,
+        Disk.Size,
+        Scan.ScanDate,
+        Scan.WMIData,
+        Scan.WMIThresholds,
+        Scan.WMIStatus
+    FROM `Scan`
+    INNER JOIN `Host` ON Scan.HostID = Host.ID
+    INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
+    WHERE Scan.Archived = 0
+    ORDER BY Scan.ID;
 '@
-$adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
-$data = New-Object System.Data.DataSet
-[void]$adapter.Fill($data)
-$sql.Dispose()
-$con.Close()
+
+    $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
+
+    $data = New-Object System.Data.DataSet
+
+    [void]$adapter.Fill($data)
+
+    $sql.Dispose()
+    $con.Close()
+}
+
+#endregion
 
 
 #region "разворот" данных
@@ -121,25 +137,25 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
         Model    = $hd.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')
         SerialNumber    = $hd.SerialNumber  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
-    
-    
+
+
     foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)}))  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
 
     {
         try    # на случай дубликатов в отчёте и ошибки добавления атрибутов
-        
+
         {
             $Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop
         }
-        
+
         catch
-        
+
         {
             Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red
         }
     }
-    
-    
+
+
     $AllInfo += $Disk
 } #endregion
 
@@ -152,27 +168,27 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
 
 {
     $g_ex = $g | Select-Object -ExpandProperty Group
-    
+
     $g_5 = $g_ex | Group-Object -Property '5'
 
-    
+
     # if ($g.Count -gt 1) {"`v", $g, $g_5} # для наглядности можно включить вывод в консоль обеих групп
-    
-    
+
+
     if ($g.Count -eq $g_5.Count)  # если группа 'SerialNumber' = группе по '5', это НЕ деградация по 'remap', добавим диск в стабильные и продолжим поиск
-    
+
     {
         $Stable += $g_ex | Select-Object -Last 1
         # Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Green
         Continue
     }
 
-    
+
     Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Magenta
 
-    
+
     foreach ($r in $g_5)
-    
+
     {
         $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1)  # в отчёт попадёт только впервые зафиксированное изменение атрибута
     }
@@ -192,17 +208,17 @@ $Degradation | Select-Object -Property `
     'Model',`
     'SerialNumber',`
     'ScanDate',`
-    @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
-    @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
-    @{Expression = {$_.'184'};Name='184 End-to-End error / IOEDC'},`
-    @{Expression = {$_.'187'};Name='187 Reported Uncorrectable Errors'},`
-    @{Expression = {$_.'197'};Name='197 Current Pending Sector Count'},`
-    @{Expression = {$_.'198'};Name='198 (Offline) Uncorrectable Sector Count'},`
-    @{Expression = {$_.'200'};Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
-| Sort-Object -Property `
+    @{Expression = { $_.'9' };   Name='9 Power-On Hours'},`
+    @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},`
+    @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},`
+    @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},`
+    @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},`
+    @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},`
+    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
+<#| Sort-Object -Property `
     @{Expression = "HostName"; Descending = $false}, `
     @{Expression = "5 Reallocated Sectors Count"; Descending = $false}, `
-    @{Expression = "ScanDate"; Descending = $false} `
+    @{Expression = "ScanDate"; Descending = $false} #>`
 | Export-Csv -NoTypeInformation -Path $ReportDegradation
 
 #endregion
@@ -219,13 +235,13 @@ $Stable | Select-Object -Property `
     'Model',`
     'SerialNumber',`
     'ScanDate',`
-    @{Expression = {$_.'9'};Name='9 Power-On Hours'},`
-    @{Expression = {$_.'5'};Name='5 Reallocated Sectors Count'},`
-    @{Expression = {$_.'184'};Name='184 End-to-End error / IOEDC'},`
-    @{Expression = {$_.'187'};Name='187 Reported Uncorrectable Errors'},`
-    @{Expression = {$_.'197'};Name='197 Current Pending Sector Count'},`
-    @{Expression = {$_.'198'};Name='198 (Offline) Uncorrectable Sector Count'},`
-    @{Expression = {$_.'200'};Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
+    @{Expression = { $_.'9' };   Name='9 Power-On Hours'},`
+    @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},`
+    @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},`
+    @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},`
+    @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},`
+    @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},`
+    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}`
 | Sort-Object -Property `
     @{Expression = '5 Reallocated Sectors Count'; Descending = $True},  `
     @{Expression = '184 End-to-End error / IOEDC'; Descending = $True},`
