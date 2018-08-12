@@ -386,9 +386,6 @@ return $dct
 }
 
 
-# function Get-DBScanResults
-
-
 function Update-DB (
     [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$tact = $null,
     [parameter(Mandatory=$true, ValueFromPipeline=$false)]         $obj  = $null,
@@ -537,4 +534,79 @@ function Update-DB (
     }
 
     return $newrecID
+}
+
+
+function Get-DBData (
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$Query = $null,
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$base = $null
+)
+{
+<#
+.SYNOPSIS
+    возвращает результат SQL-запроса
+
+.DESCRIPTION
+    возвращает результат SQL-запроса
+
+.INPUTS
+    строка с SQL-запросом, sqlite база данных
+
+.OUTPUTS
+    набор записей
+
+.PARAMETER Query
+    SQL-запрос
+
+.PARAMETER base
+    путь к файлу БД
+
+.EXAMPLE
+    $data = Get-DBData -Query 'SELECT * FROM Scan' -base 'ppsmart-posh.db'
+
+.LINK
+
+.NOTES
+    Author: Dmitry Mikhaylov
+#>
+
+    $DataSet = $null
+
+    try
+
+    {
+        # проверка битности среды выполнения для подключения подходящей библиотеки
+        if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
+        if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
+    
+        # подключение библиотеки для работы с sqlite
+        Add-Type -Path $sqlite -ErrorAction Stop
+
+        # открытие соединения с БД
+        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+        $con.ConnectionString = "Data Source=$db"
+        $con.Open()
+
+        $sql = $con.CreateCommand()
+        $sql.CommandText = $Query
+
+        $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
+    
+        $DataSet = New-Object System.Data.DataSet
+
+        [void]$adapter.Fill($DataSet)
+    }
+    
+    catch
+    
+    {
+        if($sql -ne $null) { $sql.Dispose() }
+        if ($con.State -eq 'Open') { $con.Close() }
+
+        return $DataSet
+    }
+
+
+    return $DataSet
 }

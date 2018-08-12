@@ -2,26 +2,50 @@
 
 <#
 .SYNOPSIS
-    расшифровывает и обобщает результаты .\Get-WMISMART.ps1
+    расшифровывает результаты .\Get-WMISMART.ps1 и формирует сводные отчёты
 
 .DESCRIPTION
-    сценарий расшифровывает "сырые" S.M.A.R.T. данные из отчётов .\Get-WMISMART.ps1
+    сценарий расшифровывает "сырые" S.M.A.R.T. данные, полученные в ходе работы .\Get-WMISMART.ps1 и сохранённые в sqlite БД 
     формирует два сводных отчёта:
-        _SMART_STABLE.csv - стабильные диски, состояние не меняется от отчёта к отчёту
-        _SMART_DEGRADATION.csv - диски, с растущим значением переназначенных секторов
+        отчёт по деградациям дисков с растущим значением переназначенных секторов
+        отчёт по стабильным дискам, у которых количество переназначенных секторов не меняется между сканированиями
+    позволяет сохранить отчёты как в html-форме, так и в csv-файлы, удобные для импорта в электронную таблицу
+    позволяет задать 'порог' remap`ов, с которым диски попадут в отчёт
 
 .INPUTS
-    папка с отчётами по отсканированным жёстким дискам
+    sqlite база данных 'ppsmart-posh.db' с накопленными результатами сканирований
 
 .OUTPUTS
-    отчёт с подробными атрибутами S.M.A.R.T.
+    сводные отчёт со значениями критических атрибутов дисков за время сбора показаний S.M.A.R.T.
 
 .PARAMETER ReportDir
-    папка с результатами работы .\Get-WMISMART.ps1
+    папка для сохранения отчётов
+
+.PARAMETER 5edge
+    пороговое значение 5-го атрибута (remap), начиная с которого стабильный диск попадёт в отчёт
+    не влияет на формирование отчёта по деградациям, т.е. если в 1й раз у диска было 0 remap`ов, а во 2й раз 1+, то при любом значении 5edge диск попадает в отчет по деградациям
+    0 - отчёт по всем дискам
+    1 - отчёт по дискам с количеством remap`ов 1+
+
+.PARAMETER csv
+    0/1 - отключить/включить формирование csv-отчётов
+        _SMART_STABLE.csv - стабильные диски
+        _SMART_DEGRADATION.csv - диски с растущим значением переназначенных секторов
+
+.PARAMETER html
+    0/1 - отключить/включить формирование html-отчёта
+        Consolidated Report.html - оба отчёта на одной странице
 
 .EXAMPLE
-    .\Parse-SMART.ps1 .\output
-        получить S.M.A.R.T. атрибуты дисков локального компьютера
+    .\Parse-SMART.ps1
+        сохранить сводные отчёты в подпапке 'output'
+
+.EXAMPLE
+    .\Parse-SMART.ps1 -ReportDir QWERTY -5edge 10 -csv 0 -html 1
+        сохранить сводные отчёты в подпапке 'QWERTY'
+        в отчёт по стабильным дискам включить те, у которых 5й атрибут имеет значение от 10 и выше remap`ов
+        csv-отчёты не требуются
+        сохранить отчёт в html формате
 
 .LINK
     github-page
@@ -41,8 +65,8 @@
 param
 (
      [string] $ReportDir = 'output',  # директория для вывода отчётов
-     [int]    $5edge     = 0,        # грань по 5-му атрибуту, после которой диск попадёт в отчёт
-     [int]    $csv       = 0,         # формировать csv
+     [int]    $5edge     = 1,        # начиная с какого значения remap добалять диск в отчёт
+     [int]    $csv       = 1,         # формировать csv
      [int]    $html      = 1          # формировать html
 )
 
@@ -62,6 +86,9 @@ Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогатель�
 #endregion
 
 
+if ($csv -eq 0 -and $html -eq 0) {exit}
+
+
 $WMIFiles = Get-ChildItem -Path $ReportDir -Filter '*drives.csv' -Recurse  # массив отчётов по дискам
 
 $AllInfo = @()  # полная инфа по всем дискам из всех отчётов
@@ -70,63 +97,32 @@ $Degradation = @()  # деградация по 5-му атрибуту (remap)
 
 $Stable = @()  # стабильные, без деградации по remap`у
 
+$base = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
 
 #region  # читаем WMI-отчёты из БД
 
-#region  # refactor to helper module functions!
-
-# проверяем битность среды выполнения для подключения подходящей библиотеки
-if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'}  # 64-bit
-elseif ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'}  # 32-bit
-else {Write-Host 'Hmmm... not 32 or 64 bit...'}
-
-# подключаем библиотеку для работы с sqlite
-try {Add-Type -Path $sqlite -ErrorAction Stop}
-catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
-
-$db = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
-
-if (Test-Path $db)
+if (Test-Path $base)
 
 {
-    # открываем соединение с БД
-    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-
-    $con.ConnectionString = "Data Source=$db"
-
-    $con.Open()
-
-    # запрашиваем результаты сканов
-    $sql = $con.CreateCommand()
-
-    $sql.CommandText = @'
-    SELECT
-        Host.HostName,
-        Disk.Model,
-        Disk.SerialNumber,
-        Disk.Size,
-        Scan.ScanDate,
-        Scan.WMIData,
-        Scan.WMIThresholds,
-        Scan.WMIStatus
-    FROM `Scan`
-    INNER JOIN `Host` ON Scan.HostID = Host.ID
-    INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
-    WHERE Scan.Archived = 0
-    ORDER BY Scan.ID;
+    $Query = @'
+        SELECT
+            Host.HostName,
+            Disk.Model,
+            Disk.SerialNumber,
+            Disk.Size,
+            Scan.ScanDate,
+            Scan.WMIData,
+            Scan.WMIThresholds,
+            Scan.WMIStatus
+        FROM `Scan`
+        INNER JOIN `Host` ON Scan.HostID = Host.ID
+        INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
+        WHERE Scan.Archived = 0
+        ORDER BY Scan.ID;
 '@
 
-    $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
-
-    $data = New-Object System.Data.DataSet
-
-    [void]$adapter.Fill($data)
-
-    $sql.Dispose()
-    $con.Close()
+    $data = Get-DBData -Query $Query -base $base
 }
-
-#endregion
 
 
 #region "разворот" данных
@@ -178,10 +174,10 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
 
 {
     $5val = ($g | Select-Object -ExpandProperty Group | Sort-Object -Property '5' | Select-Object -Last 1)
-    if ($5val.'5' -le $5edge)
+    if ($5val.'5' -lt $5edge)
     # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
     {
-        Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') <= $5edge (edge)" -ForegroundColor Yellow
+        Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $5edge (edge)" -ForegroundColor Yellow
         continue
     }
 
@@ -380,7 +376,7 @@ $null = $htmlStableFrag.table.attributes.Append($class)
     'PreContent'  = '<h3>Python & PowerShell S.M.A.R.T. monitoring ToolKit</h3>'
     'PostContent' = @'
 <p>Author: Dmitry Mikhaylov</p>
-<p><a href="https://github.com/mitmih/ppsmart-posh">View Project on GitHub</a></p>
+<p><a href="https://github.com/mitmih/ppsmart-posh">GitHub Project Page </a></p>
 '@
     }
 

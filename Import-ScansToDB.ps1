@@ -126,7 +126,7 @@ foreach ($f in $WMIFiles)
                 'ScanDate',
                 'WMIData',
                 'WMIThresholds',
-                'WMIStatus')
+                @{Name="WMIStatus"; Expression = {[int][System.Convert]::ToBoolean($Scan.WMIStatus)}})  # convert string 'false' to 0, 'true' to 1
     }
 
     Write-Host $WatchDogTimer.Elapsed.TotalSeconds "seconds`t file" $f.name -ForegroundColor  Green
