@@ -610,3 +610,103 @@ function Get-DBData (
 
     return $DataSet
 }
+
+
+function Get-RawValues ([string] $wmi) {
+<#
+.SYNOPSIS
+    функци€ переводит сырой массив S.M.A.R.T.-данных диска в формат 'код атрибута' = 'raw-значение'
+
+.DESCRIPTION
+    функци€ парсит массивы, конвертирует данные в зависимости от атрибута и возвращает набор атрибутов и их значений в виде хэш-таблицы
+
+.INPUTS
+    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
+
+.OUTPUTS
+    хэш-таблица @{'код атрибута' = 'raw-значение'}
+
+.PARAMETER data
+    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
+
+.EXAMPLE
+    $raws = Get-RawValues -data $WMIData
+
+.LINK
+    структура 512-байт массива данных S.M.A.R.T. (корректное описание)
+        http://www.t13.org/Documents/UploadedDocuments/docs2005/e05171r0-ACS-SMARTAttributes_Overview.pdf
+
+.NOTES
+    Author: Dmitry Mikhaylov
+
+    чтение 512-байт массива 12ти байтовыми блоками начинаетс€ со смещени€ +2
+    т.к. первые два байта €вл€ютс€ ¬≈–—»≈… »ƒ≈Ќ“»‘» ј“ќ–ј структуры S.M.A.R.T.-данных (vendor-specific)
+
+    структура 512-байт S.M.A.R.T.-массива данных
+        Offset      Length (bytes)  Description
+        0           2               SMART structure version (this is vendor-specific)
+        2           12              Attribute entry 1
+        2+(12)      12              Attribute entry 2
+        ...         ...             ...
+        2+(12*29)   12              Attribute entry 30
+
+    структура 12-байтового блока
+        0     Attribute ID (dec)
+        1     Status flag (dec)
+        2     Status flag (Bits 6Ц15 Ц Reserved)
+        3     Value
+        4     Worst
+        5     Raw Value 1st byte
+        6     Raw Value 2nd byte
+        7     Raw Value 3rd byte
+        8     Raw Value 4th byte
+        9     Raw Value 5th byte
+        10    Raw Value 6th byte
+        11    Raw Value 7th byte / Reserved
+#>
+
+    $dctRes = @{}
+
+    [int[]] $data = $wmi.Split(' ')
+
+    for ($i = 2; $i -le 350; $i += 12)
+
+    {
+        if ($data[$i] -eq 0) {continue}  # пропускаем атрибуты с нулевым кодом. Thresholds при этом в расчЄт не берЄм, т.к. у каких-то новых моделей ∆ƒ в этом массиве почти одни нули
+
+        $h0  = '{0:x2}' -f $data[$i+0]  # Attribute ID
+
+        $h5  = '{0:x2}' -f $data[$i+5]  # Raw Value 1st byte
+        $h6  = '{0:x2}' -f $data[$i+6]  # Raw Value 2nd byte
+        $h7  = '{0:x2}' -f $data[$i+7]  # Raw Value 3rd byte
+        $h8  = '{0:x2}' -f $data[$i+8]  # Raw Value 4th byte
+        $h9  = '{0:x2}' -f $data[$i+9]  # Raw Value 5th byte
+        $h10 = '{0:x2}' -f $data[$i+10] # Raw Value 6th byte
+        $h11 = '{0:x2}' -f $data[$i+11] # Raw Value 7th byte
+
+    
+        if ($data[$i] -in @(190, 194))  # температура оставл€ем как есть
+
+        {
+            $raw = $data[$i+5]
+        }
+
+        elseif ($data[$i] -in @(9))  # наработка в часах
+
+        {
+            $raw = [Convert]::ToInt64("$h6 $h5".Replace(' ',''),16)
+        }
+
+        else  # переводим raw из 16-ричной в 10-тичную систему счислени€
+    
+        {
+            $raw = [Convert]::ToInt64("$h11 $h10 $h9 $h8 $h7 $h6 $h5".Replace(' ',''),16)
+        }
+
+
+        $dctRes.Add($data[$i+0], $raw)
+    }
+
+return $dctRes
+
+}

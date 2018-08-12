@@ -74,7 +74,7 @@ param
 
 $psCmdlet.ParameterSetName | Out-Null
 
-Clear-Host
+# Clear-Host
 
 $WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
 
@@ -125,10 +125,10 @@ if (Test-Path $base)
 }
 
 
-#region "разворот" данных
+#region  # "разворот" данных
 
 foreach ($hd in $data.Tables.Rows)  # обрабатываем результаты сканов $data.Tables.Rows.Count
-# $data.Tables.Rows | Select-Object -Property SerialNumber, HostName, ScanDate, @{Name="Model"; Expression = {$_.Model.Replace(' ATA Device', '').Replace(' SCSI Disk Device', '')}}
+
 {
     $Disk = (New-Object PSObject -Property @{
         ScanDate     = $hd.ScanDate
@@ -138,26 +138,17 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
         Size         = $hd.Size  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
 
+    
+    $dctRes = Get-RawValues -wmi $hd.WMIData
 
-    foreach ($atr in ( Convert-WMIArrays -data $hd.WMIData -thresh $hd.WMIThresholds | where {$_.saIDDec -in (9,5,184,187,197,198,200)}))  # расшифровываем атрибуты и по-одному добавляем к объекту $Disk
-
-    {
-        try    # на случай дубликатов в отчёте и ошибки добавления атрибутов
-
-        {
-            $Disk | Add-Member -MemberType NoteProperty -Name $atr.saIDDec -Value $atr.saRaw -ErrorAction Stop
-        }
-
-        catch
-
-        {
-            Write-Host "DUPLICATE: '$($hd.HostName)'" -ForegroundColor Red
-        }
-    }
-
+    (9,5,184,187,197,198,200) | foreach { $Disk | Add-Member -MemberType NoteProperty -Name $_ -Value $dctRes[$_] }
 
     $AllInfo += $Disk
-} #endregion
+}
+
+#endregion
+
+Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Raw`s added' -ForegroundColor  Green
 
 #endregion
 
@@ -177,7 +168,7 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
     if ($5val.'5' -lt $5edge)
     # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
     {
-        Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $5edge (edge)" -ForegroundColor Yellow
+        # Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $5edge (edge)" -ForegroundColor Yellow
         continue
     }
 
@@ -382,7 +373,7 @@ $null = $htmlStableFrag.table.attributes.Append($class)
 
     ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
 
-    Invoke-Item $htmlReport
+    # Invoke-Item $htmlReport
 
     # $IE=new-object -com internetexplorer.application
     # $IE.navigate2($htmlReport)
