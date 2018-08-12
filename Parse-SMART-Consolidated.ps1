@@ -40,9 +40,10 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-     [string] $ReportDir = 'output',  #
-     [int]    $csv       = 0,
-     [int]    $html      = 1
+     [string] $ReportDir = 'output',  # директория для вывода отчётов
+     [int]    $5edge     = 0,        # грань по 5-му атрибуту, после которой диск попадёт в отчёт
+     [int]    $csv       = 0,         # формировать csv
+     [int]    $html      = 1          # формировать html
 )
 
 #region  # НАЧАЛО
@@ -167,9 +168,23 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
 
 #region  # поиск деградаций по 5-му атрибуту
 
+$dcteo = @{}  # словарь для хранения серийника и чёт/нечёт стиля
+
+$eoStbl = 0  # ($eoStbl % 2 -eq 0) для применения разных css-стилей к чёт/нечёт строкам таблицы в html-отчёте
+
+$eoDegr = 0  #
+
 foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Object -Property SerialNumber)
 
 {
+    $5val = ($g | Select-Object -ExpandProperty Group | Sort-Object -Property '5' | Select-Object -Last 1)
+    if ($5val.'5' -le $5edge)
+    # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
+    {
+        Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') <= $5edge (edge)" -ForegroundColor Yellow
+        continue
+    }
+
     $g_ex = $g | Select-Object -ExpandProperty Group
 
     $g_5 = $g_ex | Group-Object -Property '5'
@@ -182,19 +197,29 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
 
     {
         $Stable += $g_ex | Select-Object -Last 1
-        # Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Green
+
+        # stable в консоль
+        # Write-Host "stable:`t`t" ($g_ex | Select-Object -Last 1).HostName -ForegroundColor Green  # Stable
+
+        $dcteo.Add(($g_ex.SerialNumber | Group-Object).Name, [int]($eoStbl % 2 -eq 0))
+        $eoStbl += 1
+
         Continue
     }
 
 
-    Write-Host ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Magenta
-
+    # Degradation в консоль
+    # Write-Host "degradation:" ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Magenta  # Degradation
 
     foreach ($r in $g_5)
 
     {
-        $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1)  # в отчёт попадёт только впервые зафиксированное изменение атрибута
+        # в отчёт попадёт только изменившееся значение атрибута remap
+        $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1 )
     }
+
+    $dcteo.Add(($g_ex.SerialNumber | Group-Object).Name, [int]($eoDegr % 2 -eq 0))
+    $eoDegr += 1
 }
 
 #endregion
@@ -206,8 +231,8 @@ $ReportSelectProperties = @(
     'HostName',
     'Model',
     'SerialNumber',
-    'ScanDate',
     @{Expression = { $_.Size.ToString() + ' Gb' };   Name='Size'},
+    'ScanDate',
     @{Expression = { $_.'9'.ToString() + ' hours' };   Name='9 Power-On Hours'},
     @{Expression = { $_.'5' };   Name='5 Reallocated Sectors Count'},
     @{Expression = { $_.'184' }; Name='184 End-to-End error / IOEDC'},
@@ -225,6 +250,7 @@ $ReportSortProperties = @(
     @{Expression = '198 (Offline) Uncorrectable Sector Count'; Descending = $True},
     @{Expression = '200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'; Descending = $True}
 )
+
 
 #region  # CSV отчёт Degradation
 
@@ -254,27 +280,64 @@ if ($csv)
 
 #endregion
 
+
 #region  # HTML
 
 if ($html)
 
 {
+    $htmlReport = Join-Path -Path $RootDir -ChildPath (Join-Path -Path $ReportDir -ChildPath 'Consolidated Report.html')
 
-$htmlReport = Join-Path -Path $RootDir -ChildPath (Join-Path -Path $ReportDir -ChildPath 'report.html')
+    [xml]$htmlStableFrag = $Stable | Select-Object -Property $ReportSelectProperties `
+        | Sort-Object -Property $ReportSortProperties `
+        |  ConvertTo-HTML -Fragment #-PreContent '<h2><p>Stable Disk Info</p></h2>' -PostContent '<p></p>'
 
-$htmlStableFrag = $Stable | Where-Object {$_.'5' -gt 0} | Select-Object -Property $ReportSelectProperties `
-    | Sort-Object -Property $ReportSortProperties `
-    |  ConvertTo-HTML -Fragment -PreContent '<h2><p>Stable Disk Info</h2>' -PostContent '<p></p>'
+    [xml]$htmlDegradFrag = $Degradation `
+        | Select-Object -Property $ReportSelectProperties `
+        | ConvertTo-HTML -Fragment #-PreContent '<h2><p>Degradation Disk Info</p></h2>' -PostContent '<p></p>'
 
-$htmlDegradFrag = $Degradation `
-    | Select-Object -Property $ReportSelectProperties `
-    | ConvertTo-HTML -Fragment -PreContent '<h2><p>Degradation Disk Info</h2>' -PostContent '<p></p>'
 
-$ConvertHtmlParams = @{
-    #'Title' = 'Python & PowerShell S.M.A.R.T. monitoring ToolKit'
+    for ($i = 1; $i -le $htmlDegradFrag.table.tr.count - 1; $i++)
+
+                                {
+    $key = $htmlDegradFrag.table.tr[$i].td[2]
+
+    if ($dcteo.ContainsKey($key))
+
+    {
+        $class = $htmlDegradFrag.CreateAttribute('class')
+
+        $class.Value = $( if ($dcteo[$key]) {'odd'} else {'even'} )
+
+        $null = $htmlDegradFrag.table.tr[$i].attributes.Append($class)
+    }
+    }
+
+                                #region  # классы таблиц
+
+$class = $htmlDegradFrag.CreateAttribute('class')
+
+$class.Value = 'degradation'
+
+$null = $htmlDegradFrag.table.attributes.Append($class)
+
+
+$class = $htmlStableFrag.CreateAttribute('class')
+
+$class.Value = 'stable'
+
+$null = $htmlStableFrag.table.attributes.Append($class)
+
+#endregion
+
+                                                                                                                                                                                $ConvertHtmlParams = @{
+    # 'Title' = 'Python & PowerShell S.M.A.R.T. monitoring ToolKit'  # не срабатывает, поэтому напрямую вставлен в head
+    'CssUri' = 'style.css'  # используется встроенная таблица стилей
     'Head' = @"
 <h2>report generated: $((Get-Date).ToString())</h2>
+
 <title>ppsmart-posh</title>
+
 <style>
     body {
         font-family:Calibri;
@@ -295,7 +358,7 @@ $ConvertHtmlParams = @{
     }
 
     th {
-        background-color:#267dc0;
+        background-color:#226faa /*40%, dark*/;
         color:white;
     }
 
@@ -306,29 +369,28 @@ $ConvertHtmlParams = @{
         color: black;
     }
 
-    tr:nth-child(odd) {background-color: #aad1ee; }
-    tr:nth-child(even) {background-color: #7fb9e6;}
+    .odd  {background-color: #bfdcf2 /*85%, light*/;}
+    .even {background-color: #95c5e9 /*75%, a bit more dark*/;}
+
+    .stable tr:nth-child(odd) {background-color: #bfdcf2 /*85%, light*/;}
+    .stable tr:nth-child(even) {background-color: #95c5e9 /*75%, a bit more dark*/;}
 </style>
 "@
-    'Body' = "$htmlDegradFrag `n$htmlStableFrag"
+    'Body' = '<h2><p>Degradation Disk Info</p></h2>' + $htmlDegradFrag.InnerXml + " `n" + '<h2><p>Stable Disk Info</p></h2>'      + $htmlStableFrag.InnerXml
     'PreContent'  = '<h3>Python & PowerShell S.M.A.R.T. monitoring ToolKit</h3>'
     'PostContent' = @'
-<p>Author: Dmitry Mikhaylov
-<p><a href="https://github.com/mitmih/ppsmart-posh">View Project on GitHub</a>
+<p>Author: Dmitry Mikhaylov</p>
+<p><a href="https://github.com/mitmih/ppsmart-posh">View Project on GitHub</a></p>
 '@
-#     'CssUri' = 'style.css'
-}
+    }
 
-ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
+    ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
 
-# ConvertTo-Html -Title '123' @ConvertHtmlParams | Out-File $htmlReport
+    Invoke-Item $htmlReport
 
-
-Invoke-Item $htmlReport
-
-# $IE=new-object -com internetexplorer.application
-# $IE.navigate2($htmlReport)
-# $IE.visible=$true  #>
+    # $IE=new-object -com internetexplorer.application
+    # $IE.navigate2($htmlReport)
+    # $IE.visible=$true  #>
 
 }
 
