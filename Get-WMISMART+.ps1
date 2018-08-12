@@ -289,7 +289,11 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
 
         if ($escape)
         {
-            Write-Host 'пауза в', $t, 'сек закончилась. Все незавершённые потоки считаются "зависшими" .Выход из Multi-Threading-цикла...' -ForegroundColor Red
+            if ($p -gt 0)
+            {
+                Write-Host 'пауза в' $t 'сек закончилась. Зависло потоков:' $p 'шт. Выход из Multi-Threading-цикла...' -ForegroundColor Red
+            }
+            
             Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Magenta
 
             $RunSpaces | Where-Object -FilterScript {$_.Pipe.InstanceId.Guid -in ($dctHang.Keys)} | foreach {Write-Host $_.Pipe.Streams.Debug, $_.Pipe.Streams.Information, "`t", $_.Pipe.InstanceId.Guid -ForegroundColor Red}
