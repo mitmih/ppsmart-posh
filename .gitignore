@@ -5,6 +5,7 @@
 *.db*
 *.db-journal
 *.zip
+*.sql
 
 # folders
 *additional materials*/
