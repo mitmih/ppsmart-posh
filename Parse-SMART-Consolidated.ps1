@@ -64,17 +64,18 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-     [string] $ReportDir = 'output',  # директория для вывода отчётов
-     [int]    $5edge     = 1,        # начиная с какого значения remap добалять диск в отчёт
-     [int]    $csv       = 1,         # формировать csv
-     [int]    $html      = 1          # формировать html
+     [string] $ReportDir  = 'output', # директория для вывода отчётов
+     [int]    $5edge      = 1,        # начиная с какого значения remap добалять диск в отчёт
+     [int]    $csv        = 1,        # формировать csv
+     [int]    $html       = 1,        # формировать html
+     [string] $ReportName = '_Report Consolidated'
 )
 
 #region  # НАЧАЛО
 
 $psCmdlet.ParameterSetName | Out-Null
 
-# Clear-Host
+Clear-Host
 
 $WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
 
@@ -128,7 +129,6 @@ if (Test-Path $base)
 #region  # "разворот" данных
 
 foreach ($hd in $data.Tables.Rows)  # обрабатываем результаты сканов $data.Tables.Rows.Count
-
 {
     $Disk = (New-Object PSObject -Property @{
         ScanDate     = $hd.ScanDate
@@ -138,7 +138,7 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
         Size         = $hd.Size  # Convert-hex2txt -wmisn ([string] $hd.SerialNumber.Trim())
         })
 
-    
+
     $dctRes = Get-RawValues -wmi $hd.WMIData
 
     (9,5,184,187,197,198,200) | foreach { $Disk | Add-Member -MemberType NoteProperty -Name $_ -Value $dctRes[$_] }
@@ -162,11 +162,10 @@ $eoStbl = 0  # ($eoStbl % 2 -eq 0) для применения разных css-
 $eoDegr = 0  #
 
 foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Object -Property SerialNumber)
-
 {
+    # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
     $5val = ($g | Select-Object -ExpandProperty Group | Sort-Object -Property '5' | Select-Object -Last 1)
     if ($5val.'5' -lt $5edge)
-    # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
     {
         # Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $5edge (edge)" -ForegroundColor Yellow
         continue
@@ -181,7 +180,6 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
 
 
     if ($g.Count -eq $g_5.Count)  # если группа 'SerialNumber' = группе по '5', это НЕ деградация по 'remap', добавим диск в стабильные и продолжим поиск
-
     {
         $Stable += $g_ex | Select-Object -Last 1
 
@@ -199,7 +197,6 @@ foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Ob
     # Write-Host "degradation:" ($g_ex | Select-Object -Property 'HostName' -Unique).HostName -ForegroundColor Magenta  # Degradation
 
     foreach ($r in $g_5)
-
     {
         # в отчёт попадёт только изменившееся значение атрибута remap
         $Degradation += ($r | Select-Object -ExpandProperty Group | Select-Object -First 1 )
@@ -242,9 +239,8 @@ $ReportSortProperties = @(
 #region  # CSV отчёт Degradation
 
 if ($csv)
-
 {
-    $csvDegradation = Join-Path -Path $ReportDir -ChildPath '_SMART_DEGRADATION.csv'  # degradation, from all reports
+    $csvDegradation = Join-Path -Path $ReportDir -ChildPath "$ReportName - Degradation.csv"  # degradation, from all reports
 
     if (Test-Path -Path $csvDegradation) {Remove-Item -Path $csvDegradation}
 
@@ -256,7 +252,7 @@ if ($csv)
     | Export-Csv -NoTypeInformation -Path $csvDegradation
 
 
-    $csvStable = Join-Path -Path $ReportDir -ChildPath '_SMART_STABLE.csv'  # full smart values, from all reports
+    $csvStable = Join-Path -Path $ReportDir -ChildPath "$ReportName - Stable.csv"  # full smart values, from all reports
 
     if (Test-Path -Path $csvStable) {Remove-Item -Path $csvStable}
 
@@ -271,9 +267,8 @@ if ($csv)
 #region  # HTML
 
 if ($html)
-
 {
-    $htmlReport = Join-Path -Path $RootDir -ChildPath (Join-Path -Path $ReportDir -ChildPath 'Consolidated Report.html')
+    $htmlReport = Join-Path -Path $RootDir -ChildPath (Join-Path -Path $ReportDir -ChildPath "$ReportName - Stable + Degradation.html")
 
     [xml]$htmlStableFrag = $Stable | Select-Object -Property $ReportSelectProperties `
         | Sort-Object -Property $ReportSortProperties `
@@ -285,39 +280,42 @@ if ($html)
 
 
     for ($i = 1; $i -le $htmlDegradFrag.table.tr.count - 1; $i++)
-
-                                {
-    $key = $htmlDegradFrag.table.tr[$i].td[2]
-
-    if ($dcteo.ContainsKey($key))
-
     {
-        $class = $htmlDegradFrag.CreateAttribute('class')
+        $key = $htmlDegradFrag.table.tr[$i].td[2]
 
-        $class.Value = $( if ($dcteo[$key]) {'odd'} else {'even'} )
+        if ($dcteo.ContainsKey($key))
+        {
+            $class = $htmlDegradFrag.CreateAttribute('class')
 
-        $null = $htmlDegradFrag.table.tr[$i].attributes.Append($class)
+            $class.Value = $( if ($dcteo[$key]) {'odd'} else {'even'} )
+
+            $null = $htmlDegradFrag.table.tr[$i].attributes.Append($class)
+        }
     }
-    }
 
-                                #region  # классы таблиц
+#region  # классы таблиц
 
-$class = $htmlDegradFrag.CreateAttribute('class')
+if ($Degradation.Count)
+{
+    $class = $htmlDegradFrag.CreateAttribute('class')
 
-$class.Value = 'degradation'
+    $class.Value = 'degradation'
 
-$null = $htmlDegradFrag.table.attributes.Append($class)
+    $null = $htmlDegradFrag.table.attributes.Append($class)
+}
 
+if ($Stable.Count)
+{
+    $class = $htmlStableFrag.CreateAttribute('class')
 
-$class = $htmlStableFrag.CreateAttribute('class')
+    $class.Value = 'stable'
 
-$class.Value = 'stable'
-
-$null = $htmlStableFrag.table.attributes.Append($class)
+    $null = $htmlStableFrag.table.attributes.Append($class)
+}
 
 #endregion
 
-                                                                                                                                                                                $ConvertHtmlParams = @{
+$ConvertHtmlParams = @{
     # 'Title' = 'Python & PowerShell S.M.A.R.T. monitoring ToolKit'  # не срабатывает, поэтому напрямую вставлен в head
     'CssUri' = 'style.css'  # используется встроенная таблица стилей
     'Head' = @"

@@ -1,4 +1,4 @@
-$dctSMART = @{
+п»ї$dctSMART = @{
     1='Read Error Rate'
     2='Throughput Performance'
     3='Spin-Up Time'
@@ -81,44 +81,44 @@ $dctSMART = @{
     252='Newly Added Bad Flash Block'
     253='Free Fall Protection'
     999='testName'
-}  # словарь атрибутов
+}  # СЃР»РѕРІР°СЂСЊ Р°С‚СЂРёР±СѓС‚РѕРІ
 
 
 function Convert-WMIArrays ([string] $data, [string] $thresh) {
 <#
 .SYNOPSIS
-    функция переводит сырые массивы S.M.A.R.T.-данных диска в более понятный формат
+    С„СѓРЅРєС†РёСЏ РїРµСЂРµРІРѕРґРёС‚ СЃС‹СЂС‹Рµ РјР°СЃСЃРёРІС‹ S.M.A.R.T.-РґР°РЅРЅС‹С… РґРёСЃРєР° РІ Р±РѕР»РµРµ РїРѕРЅСЏС‚РЅС‹Р№ С„РѕСЂРјР°С‚
 
 .DESCRIPTION
-    функция парсит массивы, конвертирует данные в зависимости от атрибута и возвращает весь набор атрибутов текущего диска
+    С„СѓРЅРєС†РёСЏ РїР°СЂСЃРёС‚ РјР°СЃСЃРёРІС‹, РєРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ РґР°РЅРЅС‹Рµ РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°С‚СЂРёР±СѓС‚Р° Рё РІРѕР·РІСЂР°С‰Р°РµС‚ РІРµСЃСЊ РЅР°Р±РѕСЂ Р°С‚СЂРёР±СѓС‚РѕРІ С‚РµРєСѓС‰РµРіРѕ РґРёСЃРєР°
 
 .INPUTS
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictThresholds
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictData
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictThresholds
 
 .OUTPUTS
-    массив объектов-атрибутов S.M.A.R.T.
+    РјР°СЃСЃРёРІ РѕР±СЉРµРєС‚РѕРІ-Р°С‚СЂРёР±СѓС‚РѕРІ S.M.A.R.T.
 
 .PARAMETER data
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictData
 
 .PARAMETER thresh
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictThresholds
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictThresholds
 
 .EXAMPLE
     $AtrInfo = Convert-WMIArrays -data $WMIData -thresh $WMIThresholds
 
 .LINK
-    структура 512-байт массива данных S.M.A.R.T. (корректное описание)
+    СЃС‚СЂСѓРєС‚СѓСЂР° 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° РґР°РЅРЅС‹С… S.M.A.R.T. (РєРѕСЂСЂРµРєС‚РЅРѕРµ РѕРїРёСЃР°РЅРёРµ)
         http://www.t13.org/Documents/UploadedDocuments/docs2005/e05171r0-ACS-SMARTAttributes_Overview.pdf
 
 .NOTES
     Author: Dmitry Mikhaylov
 
-    чтение 512-байт массива 12ти байтовыми блоками начинается со смещения +2
-    т.к. первые два байта являются ВЕРСИЕЙ ИДЕНТИФИКАТОРА структуры S.M.A.R.T.-данных (vendor-specific)
+    С‡С‚РµРЅРёРµ 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° 12С‚Рё Р±Р°Р№С‚РѕРІС‹РјРё Р±Р»РѕРєР°РјРё РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃРѕ СЃРјРµС‰РµРЅРёСЏ +2
+    С‚.Рє. РїРµСЂРІС‹Рµ РґРІР° Р±Р°Р№С‚Р° СЏРІР»СЏСЋС‚СЃСЏ Р’Р•Р РЎРР•Р™ РР”Р•РќРўРР¤РРљРђРўРћР Рђ СЃС‚СЂСѓРєС‚СѓСЂС‹ S.M.A.R.T.-РґР°РЅРЅС‹С… (vendor-specific)
 
-    структура 512-байт S.M.A.R.T.-массива данных
+    СЃС‚СЂСѓРєС‚СѓСЂР° 512-Р±Р°Р№С‚ S.M.A.R.T.-РјР°СЃСЃРёРІР° РґР°РЅРЅС‹С…
         Offset      Length (bytes)  Description
         0           2               SMART structure version (this is vendor-specific)
         2           12              Attribute entry 1
@@ -126,10 +126,10 @@ function Convert-WMIArrays ([string] $data, [string] $thresh) {
         ...         ...             ...
         2+(12*29)   12              Attribute entry 30
 
-    структура 12-байтового блока
+    СЃС‚СЂСѓРєС‚СѓСЂР° 12-Р±Р°Р№С‚РѕРІРѕРіРѕ Р±Р»РѕРєР°
         0     Attribute ID (dec)
         1     Status flag (dec)
-        2     Status flag (Bits 6–15 – Reserved)
+        2     Status flag (Bits 6вЂ“15 вЂ“ Reserved)
         3     Value
         4     Worst
         5     Raw Value 1st byte
@@ -144,9 +144,9 @@ function Convert-WMIArrays ([string] $data, [string] $thresh) {
     $Result = @()
     [int[]] $data = $data.Split(' ')
     [int[]] $thresh = $thresh.Split(' ')
-    if ($data.Length -eq 512 ) {  # работаем по массивам, каждая 12-байтовая группа отвечает за свой атрибут
-        for ($i = 2; $i -le 350; $i = $i + 12) {  # всего может быть 29 атрибутов, длина значащей части массива 2+12*29 = 350 байт, оставшиеся байты будут мешать и могут вызвать исключение при добавлении в PropertyNote объекта диска
-            if ($data[$i] -eq 0) {continue}  # пропускаем атрибуты с нулевым кодом. Thresholds при этом в расчёт не берём, т.к. у каких-то новых моделей ЖД в этом массиве почти одни нули
+    if ($data.Length -eq 512 ) {  # СЂР°Р±РѕС‚Р°РµРј РїРѕ РјР°СЃСЃРёРІР°Рј, РєР°Р¶РґР°СЏ 12-Р±Р°Р№С‚РѕРІР°СЏ РіСЂСѓРїРїР° РѕС‚РІРµС‡Р°РµС‚ Р·Р° СЃРІРѕР№ Р°С‚СЂРёР±СѓС‚
+        for ($i = 2; $i -le 350; $i = $i + 12) {  # РІСЃРµРіРѕ РјРѕР¶РµС‚ Р±С‹С‚СЊ 29 Р°С‚СЂРёР±СѓС‚РѕРІ, РґР»РёРЅР° Р·РЅР°С‡Р°С‰РµР№ С‡Р°СЃС‚Рё РјР°СЃСЃРёРІР° 2+12*29 = 350 Р±Р°Р№С‚, РѕСЃС‚Р°РІС€РёРµСЃСЏ Р±Р°Р№С‚С‹ Р±СѓРґСѓС‚ РјРµС€Р°С‚СЊ Рё РјРѕРіСѓС‚ РІС‹Р·РІР°С‚СЊ РёСЃРєР»СЋС‡РµРЅРёРµ РїСЂРё РґРѕР±Р°РІР»РµРЅРёРё РІ PropertyNote РѕР±СЉРµРєС‚Р° РґРёСЃРєР°
+            if ($data[$i] -eq 0) {continue}  # РїСЂРѕРїСѓСЃРєР°РµРј Р°С‚СЂРёР±СѓС‚С‹ СЃ РЅСѓР»РµРІС‹Рј РєРѕРґРѕРј. Thresholds РїСЂРё СЌС‚РѕРј РІ СЂР°СЃС‡С‘С‚ РЅРµ Р±РµСЂС‘Рј, С‚.Рє. Сѓ РєР°РєРёС…-С‚Рѕ РЅРѕРІС‹С… РјРѕРґРµР»РµР№ Р–Р” РІ СЌС‚РѕРј РјР°СЃСЃРёРІРµ РїРѕС‡С‚Рё РѕРґРЅРё РЅСѓР»Рё
 
             $h0  = '{0:x2}' -f $data[$i+0]  # Attribute ID
             $h1  = '{0:x2}' -f $data[$i+1]  # Status flag
@@ -161,15 +161,15 @@ function Convert-WMIArrays ([string] $data, [string] $thresh) {
             $h10 = '{0:x2}' -f $data[$i+10] # Raw Value 6th byte
             $h11 = '{0:x2}' -f $data[$i+11] # Raw Value 7th byte
 
-            $raw = [Convert]::ToInt64("$h11 $h10 $h9 $h8 $h7 $h6 $h5".Replace(' ',''),16)  # переводим из 16-ричной в 10-тичную систему счисления
+            $raw = [Convert]::ToInt64("$h11 $h10 $h9 $h8 $h7 $h6 $h5".Replace(' ',''),16)  # РїРµСЂРµРІРѕРґРёРј РёР· 16-СЂРёС‡РЅРѕР№ РІ 10-С‚РёС‡РЅСѓСЋ СЃРёСЃС‚РµРјСѓ СЃС‡РёСЃР»РµРЅРёСЏ
 
-            if ($data[$i] -in @(190, 194)) {$raw = $data[$i+5]}  # температуру оставляем как есть
-            if ($data[$i] -in @(9)) {$raw = [Convert]::ToInt64("$h6 $h5".Replace(' ',''),16)}  # наработка в часах
+            if ($data[$i] -in @(190, 194)) {$raw = $data[$i+5]}  # С‚РµРјРїРµСЂР°С‚СѓСЂСѓ РѕСЃС‚Р°РІР»СЏРµРј РєР°Рє РµСЃС‚СЊ
+            if ($data[$i] -in @(9)) {$raw = [Convert]::ToInt64("$h6 $h5".Replace(' ',''),16)}  # РЅР°СЂР°Р±РѕС‚РєР° РІ С‡Р°СЃР°С…
 
             $Result += (New-Object PSObject -Property @{
                 saIDDec     = [int]    $data[$i]
                 saIDHex     = '{0:x2}' -f $data[$i]
-                saName      = [string] $(if ($dctSMART.ContainsKey([int] $data[$i])) {$dctSMART[[int] $data[$i]]} else {$null})  # вытаскиваем из словаря $dctSMART
+                saName      = [string] $(if ($dctSMART.ContainsKey([int] $data[$i])) {$dctSMART[[int] $data[$i]]} else {$null})  # РІС‹С‚Р°СЃРєРёРІР°РµРј РёР· СЃР»РѕРІР°СЂСЏ $dctSMART
                 saThreshold = [int]    $thresh[$i+1]
                 saValue     = [int]    $data[$i+3]
                 saWorst     = [int]    $data[$i+4]
@@ -187,42 +187,142 @@ function Convert-WMIArrays ([string] $data, [string] $thresh) {
 }
 
 
+function Get-RawValues ([string] $wmi) {
+<#
+.SYNOPSIS
+    С„СѓРЅРєС†РёСЏ РїРµСЂРµРІРѕРґРёС‚ СЃС‹СЂРѕР№ РјР°СЃСЃРёРІ S.M.A.R.T.-РґР°РЅРЅС‹С… РґРёСЃРєР° РІ С„РѕСЂРјР°С‚ 'РєРѕРґ Р°С‚СЂРёР±СѓС‚Р°' = 'raw-Р·РЅР°С‡РµРЅРёРµ'
+
+.DESCRIPTION
+    С„СѓРЅРєС†РёСЏ РїР°СЂСЃРёС‚ РјР°СЃСЃРёРІС‹, РєРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ РґР°РЅРЅС‹Рµ РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°С‚СЂРёР±СѓС‚Р° Рё РІРѕР·РІСЂР°С‰Р°РµС‚ РЅР°Р±РѕСЂ Р°С‚СЂРёР±СѓС‚РѕРІ Рё РёС… Р·РЅР°С‡РµРЅРёР№ РІ РІРёРґРµ С…СЌС€-С‚Р°Р±Р»РёС†С‹
+
+.INPUTS
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictData
+
+.OUTPUTS
+    С…СЌС€-С‚Р°Р±Р»РёС†Р° @{'РєРѕРґ Р°С‚СЂРёР±СѓС‚Р°' = 'raw-Р·РЅР°С‡РµРЅРёРµ'}
+
+.PARAMETER data
+    512-Р±Р°Р№С‚ РјР°СЃСЃРёРІ СЃ РґР°РЅРЅС‹РјРё РёР· РєР»Р°СЃСЃР° MSStorageDriver_FailurePredictData
+
+.EXAMPLE
+    $raws = Get-RawValues -data $WMIData
+
+.LINK
+    СЃС‚СЂСѓРєС‚СѓСЂР° 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° РґР°РЅРЅС‹С… S.M.A.R.T. (РєРѕСЂСЂРµРєС‚РЅРѕРµ РѕРїРёСЃР°РЅРёРµ)
+        http://www.t13.org/Documents/UploadedDocuments/docs2005/e05171r0-ACS-SMARTAttributes_Overview.pdf
+
+.NOTES
+    Author: Dmitry Mikhaylov
+
+    С‡С‚РµРЅРёРµ 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° 12С‚Рё Р±Р°Р№С‚РѕРІС‹РјРё Р±Р»РѕРєР°РјРё РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃРѕ СЃРјРµС‰РµРЅРёСЏ +2
+    С‚.Рє. РїРµСЂРІС‹Рµ РґРІР° Р±Р°Р№С‚Р° СЏРІР»СЏСЋС‚СЃСЏ Р’Р•Р РЎРР•Р™ РР”Р•РќРўРР¤РРљРђРўРћР Рђ СЃС‚СЂСѓРєС‚СѓСЂС‹ S.M.A.R.T.-РґР°РЅРЅС‹С… (vendor-specific)
+
+    СЃС‚СЂСѓРєС‚СѓСЂР° 512-Р±Р°Р№С‚ S.M.A.R.T.-РјР°СЃСЃРёРІР° РґР°РЅРЅС‹С…
+        Offset      Length (bytes)  Description
+        0           2               SMART structure version (this is vendor-specific)
+        2           12              Attribute entry 1
+        2+(12)      12              Attribute entry 2
+        ...         ...             ...
+        2+(12*29)   12              Attribute entry 30
+
+    СЃС‚СЂСѓРєС‚СѓСЂР° 12-Р±Р°Р№С‚РѕРІРѕРіРѕ Р±Р»РѕРєР°
+        0     Attribute ID (dec)
+        1     Status flag (dec)
+        2     Status flag (Bits 6вЂ“15 вЂ“ Reserved)
+        3     Value
+        4     Worst
+        5     Raw Value 1st byte
+        6     Raw Value 2nd byte
+        7     Raw Value 3rd byte
+        8     Raw Value 4th byte
+        9     Raw Value 5th byte
+        10    Raw Value 6th byte
+        11    Raw Value 7th byte / Reserved
+#>
+
+    $dctRes = @{}
+
+    [int[]] $data = $wmi.Split(' ')
+
+    for ($i = 2; $i -le 350; $i += 12)
+
+    {
+        if ($data[$i] -eq 0) {continue}  # РїСЂРѕРїСѓСЃРєР°РµРј Р°С‚СЂРёР±СѓС‚С‹ СЃ РЅСѓР»РµРІС‹Рј РєРѕРґРѕРј. Thresholds РїСЂРё СЌС‚РѕРј РІ СЂР°СЃС‡С‘С‚ РЅРµ Р±РµСЂС‘Рј, С‚.Рє. Сѓ РєР°РєРёС…-С‚Рѕ РЅРѕРІС‹С… РјРѕРґРµР»РµР№ Р–Р” РІ СЌС‚РѕРј РјР°СЃСЃРёРІРµ РїРѕС‡С‚Рё РѕРґРЅРё РЅСѓР»Рё
+
+        $h0  = '{0:x2}' -f $data[$i+0]  # Attribute ID
+
+        $h5  = '{0:x2}' -f $data[$i+5]  # Raw Value 1st byte
+        $h6  = '{0:x2}' -f $data[$i+6]  # Raw Value 2nd byte
+        $h7  = '{0:x2}' -f $data[$i+7]  # Raw Value 3rd byte
+        $h8  = '{0:x2}' -f $data[$i+8]  # Raw Value 4th byte
+        $h9  = '{0:x2}' -f $data[$i+9]  # Raw Value 5th byte
+        $h10 = '{0:x2}' -f $data[$i+10] # Raw Value 6th byte
+        $h11 = '{0:x2}' -f $data[$i+11] # Raw Value 7th byte
+
+    
+        if ($data[$i] -in @(190, 194))  # С‚РµРјРїРµСЂР°С‚СѓСЂР° РѕСЃС‚Р°РІР»СЏРµРј РєР°Рє РµСЃС‚СЊ
+
+        {
+            $raw = $data[$i+5]
+        }
+
+        elseif ($data[$i] -in @(9))  # РЅР°СЂР°Р±РѕС‚РєР° РІ С‡Р°СЃР°С…
+
+        {
+            $raw = [Convert]::ToInt64("$h6 $h5".Replace(' ',''),16)
+        }
+
+        else  # РїРµСЂРµРІРѕРґРёРј raw РёР· 16-СЂРёС‡РЅРѕР№ РІ 10-С‚РёС‡РЅСѓСЋ СЃРёСЃС‚РµРјСѓ СЃС‡РёСЃР»РµРЅРёСЏ
+    
+        {
+            $raw = [Convert]::ToInt64("$h11 $h10 $h9 $h8 $h7 $h6 $h5".Replace(' ',''),16)
+        }
+
+
+        $dctRes.Add($data[$i+0], $raw)
+    }
+
+return $dctRes
+
+}
+
+
 function Convert-Flags ([int] $flagDec) {
 <#
 .SYNOPSIS
-    функция конвертирует десятичный статус флага в строку, показывающую установленные биты флагов атрибута
+    С„СѓРЅРєС†РёСЏ РєРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ РґРµСЃСЏС‚РёС‡РЅС‹Р№ СЃС‚Р°С‚СѓСЃ С„Р»Р°РіР° РІ СЃС‚СЂРѕРєСѓ, РїРѕРєР°Р·С‹РІР°СЋС‰СѓСЋ СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹Рµ Р±РёС‚С‹ С„Р»Р°РіРѕРІ Р°С‚СЂРёР±СѓС‚Р°
 
 .DESCRIPTION
-    конвертация происходит побитовым умножением флага И маски, причём оба числа в десятичной системе
-    т.к. на данный момент статус-флаг занимает всего 6 бит (биты с 6го по 15й зарезервированы), функция маскирует только эти биты
+    РєРѕРЅРІРµСЂС‚Р°С†РёСЏ РїСЂРѕРёСЃС…РѕРґРёС‚ РїРѕР±РёС‚РѕРІС‹Рј СѓРјРЅРѕР¶РµРЅРёРµРј С„Р»Р°РіР° Р РјР°СЃРєРё, РїСЂРёС‡С‘Рј РѕР±Р° С‡РёСЃР»Р° РІ РґРµСЃСЏС‚РёС‡РЅРѕР№ СЃРёСЃС‚РµРјРµ
+    С‚.Рє. РЅР° РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ СЃС‚Р°С‚СѓСЃ-С„Р»Р°Рі Р·Р°РЅРёРјР°РµС‚ РІСЃРµРіРѕ 6 Р±РёС‚ (Р±РёС‚С‹ СЃ 6РіРѕ РїРѕ 15Р№ Р·Р°СЂРµР·РµСЂРІРёСЂРѕРІР°РЅС‹), С„СѓРЅРєС†РёСЏ РјР°СЃРєРёСЂСѓРµС‚ С‚РѕР»СЊРєРѕ СЌС‚Рё Р±РёС‚С‹
 
 .INPUTS
-    десятичное значение статус-флага (2й и 3й байты из 12ти-байтового блока S.M.A.R.T.-атрибута)
+    РґРµСЃСЏС‚РёС‡РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ СЃС‚Р°С‚СѓСЃ-С„Р»Р°РіР° (2Р№ Рё 3Р№ Р±Р°Р№С‚С‹ РёР· 12С‚Рё-Р±Р°Р№С‚РѕРІРѕРіРѕ Р±Р»РѕРєР° S.M.A.R.T.-Р°С‚СЂРёР±СѓС‚Р°)
 
 .OUTPUTS
-    строка из шести символов, разделённых пробелами, напр. "- C - P O W", где буква означает что флаг установлен, а прочерк - отсутствие флага
-    S - Self-preserving - атрибут может собирать данные, даже если S.M.A.R.T. выключен
-    C - Event count - счётчик проишествий
-    R - Rate Error - показатель частоты ошибок
-    P - Performance - показатель производительности диска
-    O - Online / Offline - атрибут обновляется и во время работы (он-лайн) и в простоях (офф-лайн)
-    W - Warranty / Prefailure - когда значение атрибута достигает порогового, сбой ожидается в ближайшие 24 часа и диск может быть заменён в течении гарантийного срока
+    СЃС‚СЂРѕРєР° РёР· С€РµСЃС‚Рё СЃРёРјРІРѕР»РѕРІ, СЂР°Р·РґРµР»С‘РЅРЅС‹С… РїСЂРѕР±РµР»Р°РјРё, РЅР°РїСЂ. "- C - P O W", РіРґРµ Р±СѓРєРІР° РѕР·РЅР°С‡Р°РµС‚ С‡С‚Рѕ С„Р»Р°Рі СѓСЃС‚Р°РЅРѕРІР»РµРЅ, Р° РїСЂРѕС‡РµСЂРє - РѕС‚СЃСѓС‚СЃС‚РІРёРµ С„Р»Р°РіР°
+    S - Self-preserving - Р°С‚СЂРёР±СѓС‚ РјРѕР¶РµС‚ СЃРѕР±РёСЂР°С‚СЊ РґР°РЅРЅС‹Рµ, РґР°Р¶Рµ РµСЃР»Рё S.M.A.R.T. РІС‹РєР»СЋС‡РµРЅ
+    C - Event count - СЃС‡С‘С‚С‡РёРє РїСЂРѕРёС€РµСЃС‚РІРёР№
+    R - Rate Error - РїРѕРєР°Р·Р°С‚РµР»СЊ С‡Р°СЃС‚РѕС‚С‹ РѕС€РёР±РѕРє
+    P - Performance - РїРѕРєР°Р·Р°С‚РµР»СЊ РїСЂРѕРёР·РІРѕРґРёС‚РµР»СЊРЅРѕСЃС‚Рё РґРёСЃРєР°
+    O - Online / Offline - Р°С‚СЂРёР±СѓС‚ РѕР±РЅРѕРІР»СЏРµС‚СЃСЏ Рё РІРѕ РІСЂРµРјСЏ СЂР°Р±РѕС‚С‹ (РѕРЅ-Р»Р°Р№РЅ) Рё РІ РїСЂРѕСЃС‚РѕСЏС… (РѕС„С„-Р»Р°Р№РЅ)
+    W - Warranty / Prefailure - РєРѕРіРґР° Р·РЅР°С‡РµРЅРёРµ Р°С‚СЂРёР±СѓС‚Р° РґРѕСЃС‚РёРіР°РµС‚ РїРѕСЂРѕРіРѕРІРѕРіРѕ, СЃР±РѕР№ РѕР¶РёРґР°РµС‚СЃСЏ РІ Р±Р»РёР¶Р°Р№С€РёРµ 24 С‡Р°СЃР° Рё РґРёСЃРє РјРѕР¶РµС‚ Р±С‹С‚СЊ Р·Р°РјРµРЅС‘РЅ РІ С‚РµС‡РµРЅРёРё РіР°СЂР°РЅС‚РёР№РЅРѕРіРѕ СЃСЂРѕРєР°
 
 .PARAMETER flagDec
-    десятичное значение статус-флага
+    РґРµСЃСЏС‚РёС‡РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ СЃС‚Р°С‚СѓСЃ-С„Р»Р°РіР°
 
 .EXAMPLE
     $MyStringFlag = Convert-Flags -flagDec 255
 
 .LINK
-    структура 512-байт массива данных S.M.A.R.T. (корректное описание)
+    СЃС‚СЂСѓРєС‚СѓСЂР° 512-Р±Р°Р№С‚ РјР°СЃСЃРёРІР° РґР°РЅРЅС‹С… S.M.A.R.T. (РєРѕСЂСЂРµРєС‚РЅРѕРµ РѕРїРёСЃР°РЅРёРµ)
         http://www.t13.org/Documents/UploadedDocuments/docs2005/e05171r0-ACS-SMARTAttributes_Overview.pdf
-    структура и флаги
+    СЃС‚СЂСѓРєС‚СѓСЂР° Рё С„Р»Р°РіРё
         https://www.micron.com/~/media/documents/products/technical-note/solid-state-storage/tnfd21_m500-mu02_smart_attributes.pdf
         https://www.micron.com/~/media/documents/products/technical-note/solid-state-storage/tnfd22_client_ssd_smart_attributes.pdf
         https://www.micron.com/~/media/documents/products/technical-note/solid-state-storage/tnfd34_5100_ssd_smart_implementation.pdf
 
-    ещё немного про флаги
+    РµС‰С‘ РЅРµРјРЅРѕРіРѕ РїСЂРѕ С„Р»Р°РіРё
         https://white55.ru/smart.html
         https://www.hdsentinel.com/smart/index.php
         http://sysadm.pp.ua/linux/monitoring-systems/smart-attributes.html
@@ -230,7 +330,7 @@ function Convert-Flags ([int] $flagDec) {
 .NOTES
     Author: Dmitry Mikhaylov
 
-    Status flag биты:
+    Status flag Р±РёС‚С‹:
         0 Bit   Warranty - Prefailure/advisory bit. Applicable only when the current value is less than or equal to its threshold.
             0 = Advisory: the device has exceeded its intended design life; the failure is not covered under the drive warranty.
             1 = Prefailure: warrantable, failure is expected in 24 hours and is covered in the drive warranty.
@@ -255,7 +355,7 @@ function Convert-Flags ([int] $flagDec) {
             0 = Not a self-preserving attribute.
             1 = Self-preserving attribute.
 
-        Bits 6–15 – Reserved
+        Bits 6вЂ“15 вЂ“ Reserved
 #>
     #foreach ($m in @(1,2,4,8,16,32)) {Write-Host ([System.Convert]::ToString($flagDec,2)), ([convert]::ToString($m,2)), (($flagDec -band $m) -gt 0)}  # for debug
     $b0 = if (($flagDec -band   1) -gt 0) {'W'} else {'-'}  # bitmask 000001
@@ -271,29 +371,29 @@ function Convert-Flags ([int] $flagDec) {
 function Convert-hex2txt ([string] $wmisn) {
 <#
 .SYNOPSIS
-    функция конвертирует серийный номер жёсткого диска из шестнадцатиричного в текстовый формат
+    С„СѓРЅРєС†РёСЏ РєРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ СЃРµСЂРёР№РЅС‹Р№ РЅРѕРјРµСЂ Р¶С‘СЃС‚РєРѕРіРѕ РґРёСЃРєР° РёР· С€РµСЃС‚РЅР°РґС†Р°С‚РёСЂРёС‡РЅРѕРіРѕ РІ С‚РµРєСЃС‚РѕРІС‹Р№ С„РѕСЂРјР°С‚
 
 .DESCRIPTION
-    ОС Windows 7 хранит в WMI серийный номер в шестнадцатиричном формате, причем байты по-парно
-    поменяны местами, а ОС Windows 10 - в текстовом, совпадающем с номером на наклейке ЖД
+    РћРЎ Windows 7 С…СЂР°РЅРёС‚ РІ WMI СЃРµСЂРёР№РЅС‹Р№ РЅРѕРјРµСЂ РІ С€РµСЃС‚РЅР°РґС†Р°С‚РёСЂРёС‡РЅРѕРј С„РѕСЂРјР°С‚Рµ, РїСЂРёС‡РµРј Р±Р°Р№С‚С‹ РїРѕ-РїР°СЂРЅРѕ
+    РїРѕРјРµРЅСЏРЅС‹ РјРµСЃС‚Р°РјРё, Р° РћРЎ Windows 10 - РІ С‚РµРєСЃС‚РѕРІРѕРј, СЃРѕРІРїР°РґР°СЋС‰РµРј СЃ РЅРѕРјРµСЂРѕРј РЅР° РЅР°РєР»РµР№РєРµ Р–Р”
 
-    функция проверяет формат серийного номера
-    при необходимости конвертирует шестнадцатиричный серийный номер в текст, исправляя порядок символов
+    С„СѓРЅРєС†РёСЏ РїСЂРѕРІРµСЂСЏРµС‚ С„РѕСЂРјР°С‚ СЃРµСЂРёР№РЅРѕРіРѕ РЅРѕРјРµСЂР°
+    РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё РєРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ С€РµСЃС‚РЅР°РґС†Р°С‚РёСЂРёС‡РЅС‹Р№ СЃРµСЂРёР№РЅС‹Р№ РЅРѕРјРµСЂ РІ С‚РµРєСЃС‚, РёСЃРїСЂР°РІР»СЏСЏ РїРѕСЂСЏРґРѕРє СЃРёРјРІРѕР»РѕРІ
 
-    например: win7 format                        -> win10 format
+    РЅР°РїСЂРёРјРµСЂ: win7 format                        -> win10 format
         56394b4d37345130202020202020202020202020 -> 9VMK470Q
         32535841394a5a46354138333932202020202020 -> S2AXJ9FZA53829
         5639514d42363439202020202020202020202020 -> 9VMQ6B94
 
 
 .INPUTS
-    строка с серийным номером ЖД из WMI
+    СЃС‚СЂРѕРєР° СЃ СЃРµСЂРёР№РЅС‹Рј РЅРѕРјРµСЂРѕРј Р–Р” РёР· WMI
 
 .OUTPUTS
-    нормализованная строка строка с серийным номером
+    РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅР°СЏ СЃС‚СЂРѕРєР° СЃС‚СЂРѕРєР° СЃ СЃРµСЂРёР№РЅС‹Рј РЅРѕРјРµСЂРѕРј
 
 .PARAMETER wmisn
-    строка с серийным номером из WMI
+    СЃС‚СЂРѕРєР° СЃ СЃРµСЂРёР№РЅС‹Рј РЅРѕРјРµСЂРѕРј РёР· WMI
 
 .EXAMPLE
     $TXTSerialNumber = Convert-hex2txt -wmisn $WMISerialNumber
@@ -307,7 +407,7 @@ function Convert-hex2txt ([string] $wmisn) {
 #>
 
 
-    if ($wmisn.Length -eq 40) {  # проверка на длину
+    if ($wmisn.Length -eq 40) {  # РїСЂРѕРІРµСЂРєР° РЅР° РґР»РёРЅСѓ
         $txt = ""
         for ($i = 0; $i -lt 40; $i = $i + 4) {
             $txt = $txt + [CHAR][CONVERT]::toint16("$($wmisn[$i+2])$($wmisn[$i+3])",16) + [CHAR][CONVERT]::toint16("$($wmisn[$i+0])$($wmisn[$i+1])",16)
@@ -322,22 +422,22 @@ function Convert-hex2txt ([string] $wmisn) {
 function Get-DBHashTable ([string] $table) {
 <#
 .SYNOPSIS
-    возвращает данные из таблицы базы данных в виде словаря
+    РІРѕР·РІСЂР°С‰Р°РµС‚ РґР°РЅРЅС‹Рµ РёР· С‚Р°Р±Р»РёС†С‹ Р±Р°Р·С‹ РґР°РЅРЅС‹С… РІ РІРёРґРµ СЃР»РѕРІР°СЂСЏ
 
 .DESCRIPTION
-    поддерживает SQL-запросы к таблицам Disk, Host
-    формирует словарь в виде
+    РїРѕРґРґРµСЂР¶РёРІР°РµС‚ SQL-Р·Р°РїСЂРѕСЃС‹ Рє С‚Р°Р±Р»РёС†Р°Рј Disk, Host
+    С„РѕСЂРјРёСЂСѓРµС‚ СЃР»РѕРІР°СЂСЊ РІ РІРёРґРµ
         'HostName' = ID
         'SerialNumber' = ID
 
 .INPUTS
-    имя таблицы
+    РёРјСЏ С‚Р°Р±Р»РёС†С‹
 
 .OUTPUTS
-    объект типа HashTable
+    РѕР±СЉРµРєС‚ С‚РёРїР° HashTable
 
 .PARAMETER table
-    имя таблицы для формирования словаря
+    РёРјСЏ С‚Р°Р±Р»РёС†С‹ РґР»СЏ С„РѕСЂРјРёСЂРѕРІР°РЅРёСЏ СЃР»РѕРІР°СЂСЏ
 
 .EXAMPLE
     $dctDisk = Get-DBHashTable -table 'Disk'
@@ -348,29 +448,40 @@ function Get-DBHashTable ([string] $table) {
     Author: Dmitry Mikhaylov
 #>
 
+$dctQuery = @{  # РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ "... AS key FROM ..." РїРѕС‚РѕРјСѓ С‡С‚Рѕ Р·Р°С‚РµРј С‚Р°Рє Р±СѓРґРµС‚ Р·Р°РїРѕР»РЅСЏС‚СЊСЃСЏ СЃР»РѕРІР°СЂСЊ {$dct[$r.key] = $r.ID}
+    'Disk' = 'SELECT ID, SerialNumber AS key FROM Disk;'
+    'Host' = 'SELECT ID, HostName AS key FROM Host;'
+    'Scan' = "SELECT Scan.DiskID || ' ' || Scan.HostID || ' ' || Scan.ScanDate As key, Scan.ID FROM Scan;"
+}
+
 try
 {
 
-    # проверка битности среды выполнения для подключения подходящей библиотеки
+    # РїСЂРѕРІРµСЂРєР° Р±РёС‚РЅРѕСЃС‚Рё СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РїРѕРґС…РѕРґСЏС‰РµР№ Р±РёР±Р»РёРѕС‚РµРєРё
     if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
     if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
     
-    # подключение библиотеки для работы с sqlite
+    # РїРѕРґРєР»СЋС‡РµРЅРёРµ Р±РёР±Р»РёРѕС‚РµРєРё РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ sqlite
     Add-Type -Path $sqlite -ErrorAction Stop
 
-    # открытие соединения с БД
+    # РѕС‚РєСЂС‹С‚РёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ Р‘Р”
     $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
     $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
     $con.ConnectionString = "Data Source=$db"
     $con.Open()
 
-    # исполнение SQL-запроса, результат сохраняется в переменную
+    # РёСЃРїРѕР»РЅРµРЅРёРµ SQL-Р·Р°РїСЂРѕСЃР°, СЂРµР·СѓР»СЊС‚Р°С‚ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РІ РїРµСЂРµРјРµРЅРЅСѓСЋ
     $sql = $con.CreateCommand()
-    if ($table -eq 'Disk') {$sql.CommandText = "SELECT ID, SerialNumber AS TXT FROM Disk;"}
-    if ($table -eq 'Host') {$sql.CommandText = "SELECT ID, HostName AS TXT FROM Host;"}
+
+    $sql.CommandText = $dctQuery[$table]
+
+
     $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
+
     $data = New-Object System.Data.DataSet
+
     [void]$adapter.Fill($data)
+
     $sql.Dispose()
 }
 catch
@@ -380,7 +491,7 @@ catch
 
 
 $dct = @{}
-foreach ($r in $data.Tables.Rows) {$dct[$r.TXT] = $r.ID}
+foreach ($r in $data.Tables.Rows) {$dct[$r.key] = $r.ID}
 
 return $dct
 }
@@ -393,37 +504,37 @@ function Update-DB (
 {
 <#
 .SYNOPSIS
-    добавляет/обновляет запись в таблицу БД
+    РґРѕР±Р°РІР»СЏРµС‚/РѕР±РЅРѕРІР»СЏРµС‚ Р·Р°РїРёСЃСЊ РІ С‚Р°Р±Р»РёС†Сѓ Р‘Р”
 
 .DESCRIPTION
-    при добавлении возвращает primary key новой записи
-    при обновлении существующей записи возвращает $null
+    РїСЂРё РґРѕР±Р°РІР»РµРЅРёРё РІРѕР·РІСЂР°С‰Р°РµС‚ primary key РЅРѕРІРѕР№ Р·Р°РїРёСЃРё
+    РїСЂРё РѕР±РЅРѕРІР»РµРЅРёРё СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµР№ Р·Р°РїРёСЃРё РІРѕР·РІСЂР°С‰Р°РµС‚ $null
 
 .INPUTS
-    объект с результатами сканирования жёсткого диска
+    РѕР±СЉРµРєС‚ СЃ СЂРµР·СѓР»СЊС‚Р°С‚Р°РјРё СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ Р¶С‘СЃС‚РєРѕРіРѕ РґРёСЃРєР°
 
 .OUTPUTS
-    ID новой записи или $null
+    ID РЅРѕРІРѕР№ Р·Р°РїРёСЃРё РёР»Рё $null
 
 .PARAMETER obj
-    объект, содержащий Properties для SQL-запроса в БД
+    РѕР±СЉРµРєС‚, СЃРѕРґРµСЂР¶Р°С‰РёР№ Properties РґР»СЏ SQL-Р·Р°РїСЂРѕСЃР° РІ Р‘Р”
 
 .PARAMETER tact
-    table action - название SQL-запроса, возможные запросы:
+    table action - РЅР°Р·РІР°РЅРёРµ SQL-Р·Р°РїСЂРѕСЃР°, РІРѕР·РјРѕР¶РЅС‹Рµ Р·Р°РїСЂРѕСЃС‹:
         NewHost / UpdHost
         NewDisk / UpdDisk
         NewScan / UpdScan
 
 .PARAMETER id
-    primary key записи, которую нужно обновить
+    primary key Р·Р°РїРёСЃРё, РєРѕС‚РѕСЂСѓСЋ РЅСѓР¶РЅРѕ РѕР±РЅРѕРІРёС‚СЊ
 
 .EXAMPLE
     $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
-        добавить новую запись
+        РґРѕР±Р°РІРёС‚СЊ РЅРѕРІСѓСЋ Р·Р°РїРёСЃСЊ
 
 .EXAMPLE
     $null= Update-DB -tact UpdHost -obj ($Scan | Select-Object -Property 'HostName') -id $HostID[$Scan.HostName]
-        обновить запись по её primary key
+        РѕР±РЅРѕРІРёС‚СЊ Р·Р°РїРёСЃСЊ РїРѕ РµС‘ primary key
 
 .LINK
 
@@ -436,7 +547,7 @@ function Update-DB (
     $dctQuery = @{
         'NewHost' = 'INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);'
 
-        'UpdHost' = 'UPDATE `Host` SET `ScanDate` = @ScanDate, `Ping` = @Ping, `WMIInfo` = @WMIInfo WHERE ID = @ID;'
+        'UpdHost' = ''  # not in use 'UPDATE `Host` SET `ScanDate` = @ScanDate, `Ping` = @Ping, `WMIInfo` = @WMIInfo WHERE ID = @ID;'
 
         'NewDisk' = @'
             INSERT OR IGNORE INTO `Disk` (
@@ -485,14 +596,14 @@ function Update-DB (
     try
 
     {
-        # проверка битности среды выполнения для подключения подходящей библиотеки
+        # РїСЂРѕРІРµСЂРєР° Р±РёС‚РЅРѕСЃС‚Рё СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РїРѕРґС…РѕРґСЏС‰РµР№ Р±РёР±Р»РёРѕС‚РµРєРё
         if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
         if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
     
-        # подключение библиотеки для работы с sqlite
+        # РїРѕРґРєР»СЋС‡РµРЅРёРµ Р±РёР±Р»РёРѕС‚РµРєРё РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ sqlite
         Add-Type -Path $sqlite -ErrorAction Stop
 
-        # открытие соединения с БД
+        # РѕС‚РєСЂС‹С‚РёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ Р‘Р”
         $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
         $con.ConnectionString = "Data Source=$db"
@@ -521,7 +632,7 @@ function Update-DB (
     }
 
 
-    if ($id)  # update record (передан primary key)
+    if ($id)  # update record (РїРµСЂРµРґР°РЅ primary key)
     {
         $null = $sql.Parameters.AddWithValue("@ID", $id)
         $null = $sql.ExecuteNonQuery()
@@ -544,22 +655,22 @@ function Get-DBData (
 {
 <#
 .SYNOPSIS
-    возвращает результат SQL-запроса
+    РІРѕР·РІСЂР°С‰Р°РµС‚ СЂРµР·СѓР»СЊС‚Р°С‚ SQL-Р·Р°РїСЂРѕСЃР°
 
 .DESCRIPTION
-    возвращает результат SQL-запроса
+    РІРѕР·РІСЂР°С‰Р°РµС‚ СЂРµР·СѓР»СЊС‚Р°С‚ SQL-Р·Р°РїСЂРѕСЃР°
 
 .INPUTS
-    строка с SQL-запросом, sqlite база данных
+    СЃС‚СЂРѕРєР° СЃ SQL-Р·Р°РїСЂРѕСЃРѕРј, sqlite Р±Р°Р·Р° РґР°РЅРЅС‹С…
 
 .OUTPUTS
-    набор записей
+    РЅР°Р±РѕСЂ Р·Р°РїРёСЃРµР№
 
 .PARAMETER Query
-    SQL-запрос
+    SQL-Р·Р°РїСЂРѕСЃ
 
 .PARAMETER base
-    путь к файлу БД
+    РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ Р‘Р”
 
 .EXAMPLE
     $data = Get-DBData -Query 'SELECT * FROM Scan' -base 'ppsmart-posh.db'
@@ -575,14 +686,14 @@ function Get-DBData (
     try
 
     {
-        # проверка битности среды выполнения для подключения подходящей библиотеки
+        # РїСЂРѕРІРµСЂРєР° Р±РёС‚РЅРѕСЃС‚Рё СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РїРѕРґС…РѕРґСЏС‰РµР№ Р±РёР±Р»РёРѕС‚РµРєРё
         if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
         if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
     
-        # подключение библиотеки для работы с sqlite
+        # РїРѕРґРєР»СЋС‡РµРЅРёРµ Р±РёР±Р»РёРѕС‚РµРєРё РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ sqlite
         Add-Type -Path $sqlite -ErrorAction Stop
 
-        # открытие соединения с БД
+        # РѕС‚РєСЂС‹С‚РёРµ СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ Р‘Р”
         $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
         $con.ConnectionString = "Data Source=$db"
@@ -609,104 +720,4 @@ function Get-DBData (
 
 
     return $DataSet
-}
-
-
-function Get-RawValues ([string] $wmi) {
-<#
-.SYNOPSIS
-    функция переводит сырой массив S.M.A.R.T.-данных диска в формат 'код атрибута' = 'raw-значение'
-
-.DESCRIPTION
-    функция парсит массивы, конвертирует данные в зависимости от атрибута и возвращает набор атрибутов и их значений в виде хэш-таблицы
-
-.INPUTS
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
-
-.OUTPUTS
-    хэш-таблица @{'код атрибута' = 'raw-значение'}
-
-.PARAMETER data
-    512-байт массив с данными из класса MSStorageDriver_FailurePredictData
-
-.EXAMPLE
-    $raws = Get-RawValues -data $WMIData
-
-.LINK
-    структура 512-байт массива данных S.M.A.R.T. (корректное описание)
-        http://www.t13.org/Documents/UploadedDocuments/docs2005/e05171r0-ACS-SMARTAttributes_Overview.pdf
-
-.NOTES
-    Author: Dmitry Mikhaylov
-
-    чтение 512-байт массива 12ти байтовыми блоками начинается со смещения +2
-    т.к. первые два байта являются ВЕРСИЕЙ ИДЕНТИФИКАТОРА структуры S.M.A.R.T.-данных (vendor-specific)
-
-    структура 512-байт S.M.A.R.T.-массива данных
-        Offset      Length (bytes)  Description
-        0           2               SMART structure version (this is vendor-specific)
-        2           12              Attribute entry 1
-        2+(12)      12              Attribute entry 2
-        ...         ...             ...
-        2+(12*29)   12              Attribute entry 30
-
-    структура 12-байтового блока
-        0     Attribute ID (dec)
-        1     Status flag (dec)
-        2     Status flag (Bits 6–15 – Reserved)
-        3     Value
-        4     Worst
-        5     Raw Value 1st byte
-        6     Raw Value 2nd byte
-        7     Raw Value 3rd byte
-        8     Raw Value 4th byte
-        9     Raw Value 5th byte
-        10    Raw Value 6th byte
-        11    Raw Value 7th byte / Reserved
-#>
-
-    $dctRes = @{}
-
-    [int[]] $data = $wmi.Split(' ')
-
-    for ($i = 2; $i -le 350; $i += 12)
-
-    {
-        if ($data[$i] -eq 0) {continue}  # пропускаем атрибуты с нулевым кодом. Thresholds при этом в расчёт не берём, т.к. у каких-то новых моделей ЖД в этом массиве почти одни нули
-
-        $h0  = '{0:x2}' -f $data[$i+0]  # Attribute ID
-
-        $h5  = '{0:x2}' -f $data[$i+5]  # Raw Value 1st byte
-        $h6  = '{0:x2}' -f $data[$i+6]  # Raw Value 2nd byte
-        $h7  = '{0:x2}' -f $data[$i+7]  # Raw Value 3rd byte
-        $h8  = '{0:x2}' -f $data[$i+8]  # Raw Value 4th byte
-        $h9  = '{0:x2}' -f $data[$i+9]  # Raw Value 5th byte
-        $h10 = '{0:x2}' -f $data[$i+10] # Raw Value 6th byte
-        $h11 = '{0:x2}' -f $data[$i+11] # Raw Value 7th byte
-
-    
-        if ($data[$i] -in @(190, 194))  # температура оставляем как есть
-
-        {
-            $raw = $data[$i+5]
-        }
-
-        elseif ($data[$i] -in @(9))  # наработка в часах
-
-        {
-            $raw = [Convert]::ToInt64("$h6 $h5".Replace(' ',''),16)
-        }
-
-        else  # переводим raw из 16-ричной в 10-тичную систему счисления
-    
-        {
-            $raw = [Convert]::ToInt64("$h11 $h10 $h9 $h8 $h7 $h6 $h5".Replace(' ',''),16)
-        }
-
-
-        $dctRes.Add($data[$i+0], $raw)
-    }
-
-return $dctRes
-
 }

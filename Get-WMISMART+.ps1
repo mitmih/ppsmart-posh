@@ -380,41 +380,59 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Export-Csv completed'
 
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
+$ScanID = Get-DBHashTable -table 'Scan'
 
 foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
 {
 
-    # Host
-    if (!$HostID.ContainsKey($Scan.HostName))  # new record
+        # Host
+        if (!$HostID.ContainsKey($Scan.HostName))  # если в таблице с компьютерами уже есть запись
 
-    {
-        $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
+        {  # new record
+            $hID = Update-DB -tact NewHost -obj ($Scan | Select-Object -Property 'HostName')
 
-        if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
-    }
+            if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
+        }
 
+        else
 
-    # Disk
-    if (!$DiskID.ContainsKey($Scan.SerialNumber))  # new record
-
-    {
-        $dID = Update-DB -tact NewDisk -obj ($Scan | Select-Object -Property `
-                'SerialNumber', 'Model', 'Size', 'InterfaceType', 'MediaType', 'DeviceID', 'PNPDeviceID')
-
-        if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
-    }
+        {
+            $hID = $HostID[$Scan.HostName]
+        }
 
 
-        # Scan  # таблица имеет уникальный индекс 	`DiskID`, `HostID`, `ScanDate`
-        $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
-                @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
-                @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
-                #@{Name="Archived"; Expression = {0}},
-                'ScanDate',
-                'WMIData',
-                'WMIThresholds',
-                'WMIStatus')
+        # Disk
+        if (!$DiskID.ContainsKey($Scan.SerialNumber))
 
+        {
+            $dID = Update-DB -tact NewDisk -obj ($Scan | Select-Object -Property `
+                    'SerialNumber', 'Model', 'Size', 'InterfaceType', 'MediaType', 'DeviceID', 'PNPDeviceID')
+
+            if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
+        }
+
+        else
+
+        {
+            $dID = $DiskID[$Scan.SerialNumber]
+        }
+
+        # Scan
+        $skey = "$dID $hID $($Scan.ScanDate.ToString())"
+
+        if (!$ScanID.ContainsKey($skey))
+
+        {
+            $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
+                    @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
+                    @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
+                    'ScanDate',
+                    'WMIData',
+                    'WMIThresholds',
+                    @{Name="WMIStatus"; Expression = {[int][System.Convert]::ToBoolean($Scan.WMIStatus)}})  # convert string 'false' to 0, 'true' to 1
+
+            if($sID -gt 0) {$ScanID[$skey] = $sID}
+        }
 }
 
 Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): DataBase updated' -ForegroundColor Cyan

@@ -53,6 +53,7 @@ $dateError = @{}
 
 $DiskID = Get-DBHashTable -table 'Disk'
 $HostID = Get-DBHashTable -table 'Host'
+$ScanID = Get-DBHashTable -table 'Scan'
 
 foreach ($f in $WMIFiles)
 
@@ -107,6 +108,12 @@ foreach ($f in $WMIFiles)
             if ($hID -gt 0) {$HostID[$Scan.HostName] = $hID}
         }
 
+        else
+
+        {
+            $hID = $HostID[$Scan.HostName]
+        }
+
 
         # Disk
         if (!$DiskID.ContainsKey($Scan.SerialNumber))
@@ -118,15 +125,28 @@ foreach ($f in $WMIFiles)
             if($dID -gt 0) {$DiskID[$Scan.SerialNumber] = $dID}
         }
 
+        else
+
+        {
+            $dID = $DiskID[$Scan.SerialNumber]
+        }
 
         # Scan
-        $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
-                @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
-                @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
-                'ScanDate',
-                'WMIData',
-                'WMIThresholds',
-                @{Name="WMIStatus"; Expression = {[int][System.Convert]::ToBoolean($Scan.WMIStatus)}})  # convert string 'false' to 0, 'true' to 1
+        $skey = "$dID $hID $($Scan.ScanDate.ToString())"
+
+        if (!$ScanID.ContainsKey($skey))
+
+        {
+            $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
+                    @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
+                    @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
+                    'ScanDate',
+                    'WMIData',
+                    'WMIThresholds',
+                    @{Name="WMIStatus"; Expression = {[int][System.Convert]::ToBoolean($Scan.WMIStatus)}})  # convert string 'false' to 0, 'true' to 1
+
+            if($sID -gt 0) {$ScanID[$skey] = $sID}
+        }
     }
 
     Write-Host $WatchDogTimer.Elapsed.TotalSeconds "seconds`t file" $f.name -ForegroundColor  Green
