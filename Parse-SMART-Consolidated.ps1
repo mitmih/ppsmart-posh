@@ -105,7 +105,7 @@ $base = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к Б�
 if (Test-Path $base)
 
 {
-    $Query = @'
+    $query = @'
         SELECT
             Host.HostName,
             Disk.Model,
@@ -122,7 +122,7 @@ if (Test-Path $base)
         ORDER BY Scan.ID;
 '@
 
-    $data = Get-DBData -Query $Query -base $base
+    $data = Get-DBData -query $query -base $base
 }
 
 
@@ -371,7 +371,7 @@ $ConvertHtmlParams = @{
 
     ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
 
-    # Invoke-Item $htmlReport
+    Invoke-Item $htmlReport
 
     # $IE=new-object -com internetexplorer.application
     # $IE.navigate2($htmlReport)

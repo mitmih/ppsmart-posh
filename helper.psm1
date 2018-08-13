@@ -419,28 +419,29 @@ function Convert-hex2txt ([string] $wmisn) {
 }
 
 
-function Get-DBHashTable ([string] $table) {
+function Get-DBHashTable ([parameter(Mandatory=$true, ValueFromPipeline=$false)] [string] $query) {
 <#
 .SYNOPSIS
-    возвращает данные из таблицы базы данных в виде словаря
+    возвращает данные из таблицы базы данных в виде хэштаблицы
 
 .DESCRIPTION
-    поддерживает SQL-запросы к таблицам Disk, Host
-    формирует словарь в виде
+    поддерживает SQL-запросы к таблицам Disk, Host, Scan
+    формирует и возвращает хэштаблицу в виде
         'HostName' = ID
         'SerialNumber' = ID
+        'DiskID' = 'Archived' (0 или 1)
 
 .INPUTS
-    имя таблицы
+    имя запроса для получения нужной хэштаблицы
 
 .OUTPUTS
     объект типа HashTable
 
-.PARAMETER table
-    имя таблицы для формирования словаря
+.PARAMETER query
+    имя запроса в $dctQuery
 
 .EXAMPLE
-    $dctDisk = Get-DBHashTable -table 'Disk'
+    $ArchID = Get-DBHashTable -query 'Arch'
 
 .LINK
 
@@ -448,59 +449,87 @@ function Get-DBHashTable ([string] $table) {
     Author: Dmitry Mikhaylov
 #>
 
-$dctQuery = @{  # использовать "... AS key FROM ..." потому что затем так будет заполняться словарь {$dct[$r.key] = $r.ID}
-    'Disk' = 'SELECT ID, SerialNumber AS key FROM Disk;'
-    'Host' = 'SELECT ID, HostName AS key FROM Host;'
-    'Scan' = "SELECT Scan.DiskID || ' ' || Scan.HostID || ' ' || Scan.ScanDate As key, Scan.ID FROM Scan;"
-}
+    $dct = @{}  # возвращаемая хэштаблица
 
-try
-{
-
-    # проверка битности среды выполнения для подключения подходящей библиотеки
-    if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
-    if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
+    $dctQuery = @{  # в запросах использовать "... AS key ..." потому что по полю key будет заполняться возвращаемая хэштаблица {$dct[$r.key] = $r.ID}
     
-    # подключение библиотеки для работы с sqlite
-    Add-Type -Path $sqlite -ErrorAction Stop
+        'Disk' = 'SELECT ID, SerialNumber AS key FROM Disk;'
+    
+        'Host' = 'SELECT ID, HostName AS key FROM Host;'
+    
+        'Scan' = "SELECT Scan.DiskID || ' ' || Scan.HostID || ' ' || Scan.ScanDate As key, Scan.ID FROM Scan;"
+    
+        'Arch' = @'
+-- выбор архивных записей для хэштаблицы для последующей проверки:
+--	если диск в хэштаблице ArchID и значение ArchID[DiskID] равно 1, нужна его `разархивация`
+SELECT Scan.DiskID AS key, Scan.Archived AS ID
+-- псевдоним Scan.Archived AS ID нужен для правильного формирования возвращаемой хэштаблицы
+-- т.к. функция Get-DBHashTable возвращает однотипную хэштаблицу для всех таблиц БД
+--	foreach ($r in $data.Tables.Rows) {$dct[$r.key] = $r.ID}
+FROM Scan
+WHERE Scan.Archived = 1
+GROUP BY Scan.DiskID;
+'@
+    }
 
-    # открытие соединения с БД
-    $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
-    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-    $con.ConnectionString = "Data Source=$db"
-    $con.Open()
+    try
 
-    # исполнение SQL-запроса, результат сохраняется в переменную
-    $sql = $con.CreateCommand()
+    {
 
-    $sql.CommandText = $dctQuery[$table]
+        # проверка битности среды выполнения для подключения подходящей библиотеки
+        if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
+    
+        if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
+    
+    
+        # подключение библиотеки для работы с sqlite
+        Add-Type -Path $sqlite -ErrorAction Stop
 
+        # открытие соединения с БД
+        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+    
+        $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+    
+        $con.ConnectionString = "Data Source=$db"
+    
+        $con.Open()
 
-    $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
+    
+        # исполнение SQL-запроса, результат сохраняется в переменную
+        $sql = $con.CreateCommand()
 
-    $data = New-Object System.Data.DataSet
+        $sql.CommandText = $dctQuery[$query]
 
-    [void]$adapter.Fill($data)
+        $adapter = New-Object -TypeName System.Data.SQLite.SQLiteDataAdapter $sql
 
-    $sql.Dispose()
-}
-catch
-{
-    return $null
-}
+        $data = New-Object System.Data.DataSet
 
+        [void]$adapter.Fill($data)  # будет долго выполняться и закончится исключением, см. коммент "исключение при вызове [void]$adapter.Fill($DataSet)"
 
-$dct = @{}
-foreach ($r in $data.Tables.Rows) {$dct[$r.key] = $r.ID}
+        foreach ($r in $data.Tables.Rows) { $dct[$r.key] = $r.ID }
+    }
 
-return $dct
+    catch { <# return $null #> }
+
+    finally
+
+    {
+        if ($sql -ne $null)        { $sql.Dispose() }
+        
+        if ($con.State -eq 'Open') { $con.Close()   }
+    }
+
+    return $dct
 }
 
 
 function Update-DB (
     [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$tact = $null,
+    
     [parameter(Mandatory=$true, ValueFromPipeline=$false)]         $obj  = $null,
-    [parameter(Mandatory=$false, ValueFromPipeline=$false)]   [int]$id   = $null)
+    
+    [parameter(Mandatory=$false, ValueFromPipeline=$false)]   [int]$id   = $null
+)
 {
 <#
 .SYNOPSIS
@@ -520,7 +549,7 @@ function Update-DB (
     объект, содержащий Properties для SQL-запроса в БД
 
 .PARAMETER tact
-    table action - название SQL-запроса, возможные запросы:
+    table action - название SQL-запроса в $dctQuery, возможные запросы:
         NewHost / UpdHost
         NewDisk / UpdDisk
         NewScan / UpdScan
@@ -589,7 +618,7 @@ function Update-DB (
             );
 '@
 
-        'UpdScan' = ''
+        'UpdScan' = 'UPDATE `Scan` SET `Archived` = 0 WHERE `DiskID` = @DiskID;'
     }
 
 
@@ -598,50 +627,57 @@ function Update-DB (
     {
         # проверка битности среды выполнения для подключения подходящей библиотеки
         if ([IntPtr]::Size -eq 8) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x64\System.Data.SQLite.dll' -ErrorAction Stop}  # 64-bit
+        
         if ([IntPtr]::Size -eq 4) {$sqlite = Join-Path -Path $PSScriptRoot -ChildPath 'x32\System.Data.SQLite.dll' -ErrorAction Stop}  # 32-bit
-    
+        
+        
         # подключение библиотеки для работы с sqlite
         Add-Type -Path $sqlite -ErrorAction Stop
 
+        
         # открытие соединения с БД
         $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+        
         $con.ConnectionString = "Data Source=$db"
+        
         $con.Open()
 
         $sql = $con.CreateCommand()
+        
         $sql.CommandText = $dctQuery[$tact]
         
         $objValidProperties = $obj | Get-Member -MemberType Properties -ErrorAction Stop
-    }
-    
-    catch
-    
-    {
-        if($sql -ne $null) { $sql.Dispose() }
-        if ($con.State -eq 'Open') { $con.Close() }
 
-        return $newrecID
-    }
-
-
-    foreach ($p in $objValidProperties)
+        foreach ($p in $objValidProperties)
         
-    {
-        $null = $sql.Parameters.AddWithValue("@$($p.Name)", ($obj | select -ExpandProperty $p.Name) )
+        {
+            $null = $sql.Parameters.AddWithValue("@$($p.Name)", ($obj | select -ExpandProperty $p.Name) )
+        }
+
+
+        if ($id)  # update record (передан primary key)
+        {
+            $null = $sql.Parameters.AddWithValue("@ID", $id)
+            $null = $sql.ExecuteNonQuery()
+        }
+
+        else  # add new record
+
+        {
+            if ($sql.ExecuteNonQuery()) { $newrecID = $sql.Connection.LastInsertRowId }
+        }
     }
+    
+    catch { <# return $newrecID #> }
 
-
-    if ($id)  # update record (передан primary key)
-    {
-        $null = $sql.Parameters.AddWithValue("@ID", $id)
-        $null = $sql.ExecuteNonQuery()
-    }
-
-    else  # add new record
+    finally
 
     {
-        if ($sql.ExecuteNonQuery()) { $newrecID = $sql.Connection.LastInsertRowId }
+        if ($sql -ne $null)        { $sql.Dispose() }
+        
+        if ($con.State -eq 'Open') { $con.Close()   }
     }
 
     return $newrecID
@@ -649,7 +685,8 @@ function Update-DB (
 
 
 function Get-DBData (
-    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$Query = $null,
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$query = $null,
+    
     [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$base = $null
 )
 {
@@ -673,7 +710,7 @@ function Get-DBData (
     путь к файлу БД
 
 .EXAMPLE
-    $data = Get-DBData -Query 'SELECT * FROM Scan' -base 'ppsmart-posh.db'
+    $data = Get-DBData -query 'SELECT * FROM Scan' -base 'ppsmart-posh.db'
 
 .LINK
 
@@ -706,18 +743,33 @@ function Get-DBData (
     
         $DataSet = New-Object System.Data.DataSet
 
-        [void]$adapter.Fill($DataSet)
+        [void]$adapter.Fill($DataSet)  # будет долго выполняться и закончится исключением, см. коммент "исключение при вызове [void]$adapter.Fill($DataSet)"
     }
     
-    catch
-    
+    catch { <# return $DataSet #> }
+
+    finally
+
     {
-        if($sql -ne $null) { $sql.Dispose() }
-        if ($con.State -eq 'Open') { $con.Close() }
-
-        return $DataSet
+        if ($sql -ne $null)        { $sql.Dispose() }
+        
+        if ($con.State -eq 'Open') { $con.Close()   }
     }
-
 
     return $DataSet
 }
+
+
+<# исключение при вызове [void]$adapter.Fill($DataSet)
+
+[DBG]: PS ...\ppsmart-posh>> [void]$adapter.Fill($DataSet)
+Исключение при вызове "Fill" с "1" аргументами: "database is locked
+database is locked"
+строка:1 знак:1
++ [void]$adapter.Fill($DataSet)
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : SQLiteException
+
+происходит, когда есть несохранённые в БД изменения (существует файл ppsmart-posh.db-journal)
+#>

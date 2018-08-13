@@ -346,7 +346,9 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): SerialNumber`s conver
 
 
 #region: экспорты:  отчёт по дискам, обновление входного файла (при необходимости)
+
 if ($DiskInfo.Count -gt 0)
+
 {
     $DiskInfo | Select-Object `
         'HostName',`
@@ -365,6 +367,7 @@ if ($DiskInfo.Count -gt 0)
 
 
     if (Test-Path -Path $Inp)  # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
+    
     {
         $ComputersOnLine += ($Computers | Where-Object -FilterScript {$_.HostName -notin $ComputersOnLine.HostName})  # | Select-Object -Property 'HostName')
         $ComputersOnLine | Select-Object 'HostName' | Sort-Object -Property 'HostName' | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8
@@ -378,9 +381,13 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Export-Csv completed'
 
 #region: обновление БД
 
-$DiskID = Get-DBHashTable -table 'Disk'
-$HostID = Get-DBHashTable -table 'Host'
-$ScanID = Get-DBHashTable -table 'Scan'
+$DiskID = Get-DBHashTable -query 'Disk'  # хэштаблица вида 'серийный номер диска' = ID диска
+
+$HostID = Get-DBHashTable -query 'Host'  # хэштаблица вида 'имя хоста' = ID хоста
+
+$ScanID = Get-DBHashTable -query 'Scan'  # хэштаблица вида 'дискИД хостИД ДатаСкана' = ID скан-записи
+
+$ArchID = Get-DBHashTable -query 'Arch'  # хэштаблица вида 'дискИД' = значение Scan.Archived для "разархивирования" скан-записей, если эти записи были помечены как архивные, а диск только что отсканировался
 
 foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Size' 'InterfaceType' 'MediaType' 'DeviceID' 'PNPDeviceID' 'WMIData' 'WMIThresholds' 'WMIStatus'
 {
@@ -404,7 +411,7 @@ foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Si
         # Disk
         if (!$DiskID.ContainsKey($Scan.SerialNumber))
 
-        {
+        {  # new record
             $dID = Update-DB -tact NewDisk -obj ($Scan | Select-Object -Property `
                     'SerialNumber', 'Model', 'Size', 'InterfaceType', 'MediaType', 'DeviceID', 'PNPDeviceID')
 
@@ -421,8 +428,8 @@ foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Si
         $skey = "$dID $hID $($Scan.ScanDate.ToString())"
 
         if (!$ScanID.ContainsKey($skey))
-
-        {
+        
+        {  # new record
             $sID = Update-DB -tact NewScan -obj ($Scan | Select-Object -Property `
                     @{Name="DiskID"; Expression = {$DiskID[$Scan.SerialNumber]}},
                     @{Name="HostID"; Expression = {$HostID[$Scan.HostName]}},
@@ -432,6 +439,19 @@ foreach ($Scan in $DiskInfo)  # 'HostName' 'ScanDate' 'SerialNumber' 'Model' 'Si
                     @{Name="WMIStatus"; Expression = {[int][System.Convert]::ToBoolean($Scan.WMIStatus)}})  # convert string 'false' to 0, 'true' to 1
 
             if($sID -gt 0) {$ScanID[$skey] = $sID}
+        }
+
+        # else { $sID = $ScanID[$skey] }  # если запись существует, то пропускаем её без обновления БД
+
+        
+        # диск "всплыл" при сканировании - ЕСЛИ он был архивным ($ArchID[$dID] -eq 1)
+        
+        # нужно "разархивировать" (Archived = 0) все его скан-записи - UPDATE `Scan` SET `Archived` = 0 WHERE `DiskID` = @DiskID;
+        
+        if ( <# $ArchID.ContainsKey($dID) -and #> $ArchID[$dID] -eq 1)  # 5-я версия powershell отрабатывает несуществующий ключ без исключений
+
+        {
+            $null = Update-DB -tact UpdScan -obj (New-Object psobject -Property @{DiskID = $dID})
         }
 }
 

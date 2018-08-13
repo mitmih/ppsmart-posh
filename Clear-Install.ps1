@@ -58,42 +58,78 @@ $x64 = Join-Path -Path $RootDir -ChildPath 'x64'
 if ([IntPtr]::Size -eq 8)  # 64-bit
 
 {
-    Write-Host "64-bit" -ForeGround Green
     $sqlite = Join-Path -Path $RootDir -ChildPath 'x64\System.Data.SQLite.dll'
+    $bit = 64
 }
 
 elseif ([IntPtr]::Size -eq 4)  # 32-bit
 
 {
-    Write-Host "32-bit" -ForeGround Green
     $sqlite = Join-Path -Path $RootDir -ChildPath 'x32\System.Data.SQLite.dll'
+    $bit = 32
 }
 
-else {Write-Host 'can not choose between 32 or 64 bit dll`s'}
+else {$bit = '??'}
+
+Write-Host -ForeGround Green "environment`t= $bit-bit`n"
+Write-Host -ForeGround Green "PowerShell`t= $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)`n"
+Write-Host -ForeGround Green ".Net`t`t= $($PSVersionTable.CLRVersion.Major).$($PSVersionTable.CLRVersion.Minor)`n"
+
+
 
 #endregion
 
 
-#region подтверждение и очистка
+#region  # подтверждение и очистка
 
 $confirmation = Read-Host "Если вы продолжите, все данные будут очищены`nНажмите y(es) для продолжения..."
 
-if ($confirmation.ToLower() -notin @('y','yes')) {exit}
+try
 
-if (Test-Path -Path $db)     {Remove-Item -Path $db              -Force}
+{
+    if ($confirmation.ToLower() -notin @('y','yes')) {exit}
 
-if (Test-Path -Path $input)  {Remove-Item -Path $input  -Recurse -Force}
-if (Test-Path -Path $output) {Remove-Item -Path $output -Recurse -Force}
+    if (Test-Path -Path $db)     {Remove-Item -Path $db              -Force}
 
-if (Test-Path -Path $x32)    {Remove-Item -Path $x32    -Recurse -Force}
-if (Test-Path -Path $x64)    {Remove-Item -Path $x64    -Recurse -Force}
+    if (Test-Path -Path $input)  {Remove-Item -Path $input  -Recurse -Force}
+    if (Test-Path -Path $output) {Remove-Item -Path $output -Recurse -Force}
 
-Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
+    if (Test-Path -Path $x32)    {Remove-Item -Path $x32    -Recurse -Force}
+    if (Test-Path -Path $x64)    {Remove-Item -Path $x64    -Recurse -Force}
+
+    Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
+}
+
+catch
+
+{
+    Write-Host "Remove-Item failed... Please, reopen your console/ISE and run script again"
+}
 
 #endregion
 
 
-#region setup SQLite
+#region  # new folders: input, output
+
+# новая папка, соответствует битности библиотек
+if(!(Test-Path $input))
+
+{
+    $null = New-Item -ItemType Directory -Path $input
+}
+
+(New-Object psobject -Property @{HostName = $env:COMPUTERNAME;}) | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
+
+if(!(Test-Path $output))
+
+{
+    $null = New-Item -ItemType Directory -Path $output
+}
+
+#endregion
+
+
+#region  # setup System.Data.SQLite dll`s
 
     #region определяем, какие архивы нужно скачать, в зависимости от $PSVersionTable.CLRVersion
 
@@ -183,70 +219,84 @@ Get-ChildItem -Filter "*.zip" -Path $RootDir | Remove-Item -Force
 #endregion
 
 
-#region init ppsmart-posh.db
+#region  # init ppsmart-posh.db
 
-try   {Add-Type -Path $sqlite -ErrorAction Stop}
-catch {Write-Host "Importing the SQLite assemblies, '$sqlite', failed..."}
+try
 
-$con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
-$con.ConnectionString = "Data Source=$db"
-$con.Open()
+{
+    Add-Type -Path $sqlite -ErrorAction Stop
+}
 
-$sql = $con.CreateCommand()
-$sql.CommandText = @'
-CREATE TABLE `Disk` (
-    `ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-    `SerialNumber`	TEXT NOT NULL UNIQUE,
-    `Model`			TEXT NOT NULL,
-    `Size`			INTEGER NOT NULL,
-    `InterfaceType`	TEXT,
-    `MediaType`		TEXT,
-    `DeviceID`		TEXT,
-    `PNPDeviceID`	TEXT
-);
+catch
 
-CREATE TABLE `Host` (
-	`ID`	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	`HostName`	TEXT NOT NULL UNIQUE
-);
+{
+    Write-Host "Importing SQLite assemblies by path '$sqlite' failed..."
+}
 
-CREATE TABLE `Scan` (
-    `ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	`Archived`		INTEGER DEFAULT 0,
-    `DiskID`		INTEGER NOT NULL DEFAULT 0,
-    `HostID`		INTEGER NOT NULL DEFAULT 0,
-    `ScanDate`		TEXT NOT NULL,
-    `WMIData`		TEXT NOT NULL,
-    `WMIThresholds`	TEXT,
-    `WMIStatus`		INTEGER
-);
+try
+{
+    $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
+    
+    $con.ConnectionString = "Data Source=$db"
+    
+    $con.Open()
 
---CREATE UNIQUE INDEX `IndexDisk` ON `Disk` (`SerialNumber`);
---CREATE UNIQUE INDEX `IndexHost` ON `Host` (`HostName`);
-CREATE UNIQUE INDEX `IndexScan` ON `Scan` (`DiskID`,`HostID`,`ScanDate`);
+    $sql = $con.CreateCommand()
+    
+    $sql.CommandText = @'
+    CREATE TABLE `Disk` (
+        `ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+        `SerialNumber`	TEXT NOT NULL UNIQUE,
+        `Model`			TEXT NOT NULL,
+        `Size`			INTEGER NOT NULL,
+        `InterfaceType`	TEXT,
+        `MediaType`		TEXT,
+        `DeviceID`		TEXT,
+        `PNPDeviceID`	TEXT
+    );
+
+    CREATE TABLE `Host` (
+	    `ID`	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	    `HostName`	TEXT NOT NULL UNIQUE
+    );
+
+    CREATE TABLE `Scan` (
+        `ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	    `Archived`		INTEGER DEFAULT 0,
+        `DiskID`		INTEGER NOT NULL DEFAULT 0,
+        `HostID`		INTEGER NOT NULL DEFAULT 0,
+        `ScanDate`		TEXT NOT NULL,
+        `WMIData`		TEXT NOT NULL,
+        `WMIThresholds`	TEXT,
+        `WMIStatus`		INTEGER
+    );
+
+    --CREATE UNIQUE INDEX `IndexDisk` ON `Disk` (`SerialNumber`);
+    --CREATE UNIQUE INDEX `IndexHost` ON `Host` (`HostName`);
+    CREATE UNIQUE INDEX `IndexScan` ON `Scan` (`DiskID`,`HostID`,`ScanDate`);
 '@
-if ($sql.ExecuteNonQuery() -eq 0)
+    
+    if ($sql.ExecuteNonQuery() -eq 0)
 
-{
-    Write-Output 'New DataBase is ok'
+    {
+        Write-Output 'New DataBase is ok'
+    }
+
+    else
+    
+    {
+        Write-Output 'New DataBase: "$sql.ExecuteNonQuery()" failed'
+    }
 }
 
-else
+catch {}
+
+finally
 {
-    Write-Output 'New DataBase: "$sql.ExecuteNonQuery()" failed'
+    if ($sql -ne $null)        { $sql.Dispose() }
+    if ($con.State -eq 'Open') { $con.Close()   }
 }
 
-$sql.Dispose()
-$con.Close()
-#endregion
-
-
-#region input, output
-# новая папка, соответствует битности библиотек
-if(!(Test-Path $input))  {$null = New-Item -ItemType Directory -Path $input }
-(New-Object psobject -Property @{HostName = $env:COMPUTERNAME;}) | Export-Csv -Path (Join-Path -Path $input -ChildPath "example.csv") -NoTypeInformation -Encoding UTF8
-
-if(!(Test-Path $output)) {$null = New-Item -ItemType Directory -Path $output}
 #endregion
 
 

@@ -49,11 +49,14 @@ $WMIFiles = Get-ChildItem -Path (Join-Path -Path $RootDir -ChildPath $csvDir) -F
 
 
 #region перенос результатов сканирований из CSV-файлов в SQLite БД
+
 $dateError = @{}
 
-$DiskID = Get-DBHashTable -table 'Disk'
-$HostID = Get-DBHashTable -table 'Host'
-$ScanID = Get-DBHashTable -table 'Scan'
+$DiskID = Get-DBHashTable -query 'Disk'
+
+$HostID = Get-DBHashTable -query 'Host'
+
+$ScanID = Get-DBHashTable -query 'Scan'
 
 foreach ($f in $WMIFiles)
 
