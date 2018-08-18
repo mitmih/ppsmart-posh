@@ -25,7 +25,6 @@
 
 param
 (
-    [string] $dbname = 'ppsmart-posh.db',
     [string] $csvDir = 'output'
 )
 

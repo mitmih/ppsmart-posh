@@ -83,6 +83,7 @@
     999='testName'
 }  # словарь атрибутов
 
+$db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
 
 function Convert-WMIArrays ([string] $data, [string] $thresh) {
 <#
@@ -486,7 +487,7 @@ GROUP BY Scan.DiskID;
         Add-Type -Path $sqlite -ErrorAction Stop
 
         # открытие соединения с БД
-        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        # $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
     
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
     
@@ -636,7 +637,7 @@ function Update-DB (
 
         
         # открытие соединения с БД
-        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        # $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
         
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
         
@@ -685,9 +686,9 @@ function Update-DB (
 
 
 function Get-DBData (
-    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$query = $null,
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$query = $null <#,
     
-    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$base = $null
+    [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$base = $null #>
 )
 {
 <#
@@ -710,7 +711,7 @@ function Get-DBData (
     путь к файлу БД
 
 .EXAMPLE
-    $data = Get-DBData -query 'SELECT * FROM Scan' -base 'ppsmart-posh.db'
+    $data = Get-DBData -query 'SELECT * FROM Scan' # -base 'base_name.db'
 
 .LINK
 
@@ -731,7 +732,7 @@ function Get-DBData (
         Add-Type -Path $sqlite -ErrorAction Stop
 
         # открытие соединения с БД
-        $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
+        # $db = Join-Path -Path $PSScriptRoot -ChildPath 'ppsmart-posh.db' -ErrorAction Stop
         $con = New-Object -TypeName System.Data.SQLite.SQLiteConnection
         $con.ConnectionString = "Data Source=$db"
         $con.Open()
@@ -771,5 +772,5 @@ database is locked"
     + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
     + FullyQualifiedErrorId : SQLiteException
 
-происходит, когда есть несохранённые в БД изменения (существует файл ppsmart-posh.db-journal)
+происходит, когда есть несохранённые в БД изменения (существует файл *.db-journal)
 #>

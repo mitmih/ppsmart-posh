@@ -98,32 +98,33 @@ $Degradation = @()  # деградация по 5-му атрибуту (remap)
 
 $Stable = @()  # стабильные, без деградации по remap`у
 
-$base = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
+#$base = Join-Path -Path $RootDir -ChildPath 'ppsmart-posh.db'  # путь к БД
 
 #region  # читаем WMI-отчёты из БД
 
-if (Test-Path $base)
+#if (Test-Path $base)
+#{
 
-{
-    $query = @'
-        SELECT
-            Host.HostName,
-            Disk.Model,
-            Disk.SerialNumber,
-            Disk.Size,
-            Scan.ScanDate,
-            Scan.WMIData,
-            Scan.WMIThresholds,
-            Scan.WMIStatus
-        FROM `Scan`
-        INNER JOIN `Host` ON Scan.HostID = Host.ID
-        INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
-        WHERE Scan.Archived = 0
-        ORDER BY Scan.ID;
+$query = @'
+    SELECT
+        Host.HostName,
+        Disk.Model,
+        Disk.SerialNumber,
+        Disk.Size,
+        Scan.ScanDate,
+        Scan.WMIData,
+        Scan.WMIThresholds,
+        Scan.WMIStatus
+    FROM `Scan`
+    INNER JOIN `Host` ON Scan.HostID = Host.ID
+    INNER JOIN `Disk` ON Scan.DiskID = Disk.ID
+    WHERE Scan.Archived = 0
+    ORDER BY Scan.ID;
 '@
 
-    $data = Get-DBData -query $query -base $base
-}
+$data = Get-DBData -query $query # -base $base
+
+#}
 
 
 #region  # "разворот" данных

@@ -69,11 +69,15 @@
 [CmdletBinding(DefaultParameterSetName="all")]
 param
 (
-    [string] $Inp = "$env:COMPUTERNAME",  # имя хоста либо путь к файлу списка хостов
-    # [string] $Inp = ".\input\example.csv",  # имя хоста либо путь к файлу списка хостов
-    [string] $Out = ".\output\$('{0:yyyy-MM-dd}' -f $(Get-Date)) $($Inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
-    [int]    $k   = 37,
-    [int]    $t   = 1  # once again timer
+    # [alias('i')][string] $inp = ".\input\example.csv",
+    
+    [alias('i')][string] $inp = "$env:COMPUTERNAME",
+    
+    [alias('o')][string] $out = ".\output\$('{0:yyyy-MM-dd}' -f $(Get-Date)) $($inp.ToString().Split('\')[-1].Replace('.csv', '')) drives.csv",
+    
+                   [int] $k   = 1,
+
+                   [int] $t   = 1
 )
 
 
@@ -93,12 +97,12 @@ Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогатель�
 #endregion
 
 
-if (Test-Path -Path $Inp) {$Computers = Import-Csv $Inp} else {$Computers = (New-Object psobject -Property @{HostName = $Inp;ScanDate = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+if (Test-Path -Path $inp) {$Computers = Import-Csv $inp} else {$Computers = (New-Object psobject -Property @{HostName = $inp;ScanDate = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
 
 $clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
-if ($clones -ne $null) {Write-Host "'$Inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
+if ($clones -ne $null) {Write-Host "'$inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
 
-if (Test-Path $Out) {Remove-Item -Path $Out -Force}  # отчёт по дискам
+if (Test-Path $out) {Remove-Item -Path $out -Force}  # отчёт по дискам
 
 $ComputersOnLine = @()
 $DiskInfo = @()
@@ -352,25 +356,25 @@ if ($DiskInfo.Count -gt 0)
 {
     $DiskInfo | Select-Object `
         'HostName',`
-        'ScanDate',`
         'SerialNumber',`
+        'ScanDate',`
         'Model',`
         'Size',`
         'InterfaceType',`
         'MediaType',`
         'DeviceID',`
         'PNPDeviceID',`
+        'WMIStatus',`
         'WMIData',`
-        'WMIThresholds',`
-        'WMIStatus'`
-        | Sort-Object -Property 'HostName' | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
+        'WMIThresholds'`
+        | Sort-Object -Property 'HostName' | Export-Csv -Path $out -NoTypeInformation -Encoding UTF8 #-Delimiter ';' -Append
 
 
-    if (Test-Path -Path $Inp)  # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
+    if (Test-Path -Path $inp)  # если на вход был подан файл со списком хостов, то экспортируем этот список со статусами он-лайн\офф-лайн
     
     {
         $ComputersOnLine += ($Computers | Where-Object -FilterScript {$_.HostName -notin $ComputersOnLine.HostName})  # | Select-Object -Property 'HostName')
-        $ComputersOnLine | Select-Object 'HostName' | Sort-Object -Property 'HostName' | Export-Csv -Path $Inp -NoTypeInformation -Encoding UTF8
+        $ComputersOnLine | Select-Object 'HostName' | Sort-Object -Property 'HostName' | Export-Csv -Path $inp -NoTypeInformation -Encoding UTF8
     }
 }
 
