@@ -71,9 +71,9 @@ elseif ([IntPtr]::Size -eq 4)  # 32-bit
 
 else {$bit = '??'}
 
-Write-Host -ForeGround Green "environment`t= $bit-bit`n"
-Write-Host -ForeGround Green "PowerShell`t= $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)`n"
-Write-Host -ForeGround Green ".Net`t`t= $($PSVersionTable.CLRVersion.Major).$($PSVersionTable.CLRVersion.Minor)`n"
+Write-Host -ForeGround Green "environment`t$bit-bit`n"
+Write-Host -ForeGround Green "PowerShell`t$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)`n"
+Write-Host -ForeGround Green ".Net`t`t$($PSVersionTable.CLRVersion.Major).$($PSVersionTable.CLRVersion.Minor)`n"
 
 
 
@@ -256,20 +256,20 @@ try
     );
 
     CREATE TABLE `Host` (
-	    `ID`	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	    `ID`		INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
 	    `HostName`	TEXT NOT NULL UNIQUE
     );
 
-    CREATE TABLE `Scan` (
-        `ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	    `Archived`		INTEGER DEFAULT 0,
-        `DiskID`		INTEGER NOT NULL DEFAULT 0,
-        `HostID`		INTEGER NOT NULL DEFAULT 0,
-        `ScanDate`		TEXT NOT NULL,
-        `WMIData`		TEXT NOT NULL,
-        `WMIThresholds`	TEXT,
-        `WMIStatus`		INTEGER
-    );
+CREATE TABLE `Scan` (
+	`ID`			INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	`Archived`		INTEGER DEFAULT 0,
+	`DiskID`		INTEGER NOT NULL DEFAULT 0,
+	`HostID`		INTEGER NOT NULL DEFAULT 0,
+	`ScanDate`		TEXT NOT NULL,
+	`WMIStatus`		INTEGER DEFAULT -1,
+	`WMIData`		TEXT NOT NULL,
+	`WMIThresholds`	TEXT
+);
 
     --CREATE UNIQUE INDEX `IndexDisk` ON `Disk` (`SerialNumber`);
     --CREATE UNIQUE INDEX `IndexHost` ON `Host` (`HostName`);
