@@ -575,11 +575,11 @@ function Update-DB (
     $newrecID = $null
 
     $dctQuery = @{
-        'NewHost' = 'INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);'
+        'NewHost'   = 'INSERT OR IGNORE INTO `Host` (`HostName`) VALUES (@HostName);'
 
-        'UpdHost' = ''  # not in use 'UPDATE `Host` SET `ScanDate` = @ScanDate, `Ping` = @Ping, `WMIInfo` = @WMIInfo WHERE ID = @ID;'
+        'UpdHost'   = ''  # not in use 'UPDATE `Host` SET `ScanDate` = @ScanDate, `Ping` = @Ping, `WMIInfo` = @WMIInfo WHERE ID = @ID;'
 
-        'NewDisk' = @'
+        'NewDisk'   = @'
             INSERT OR IGNORE INTO `Disk` (
                 `SerialNumber`,
                 `Model`,
@@ -599,9 +599,9 @@ function Update-DB (
             );
 '@
 
-        'UpdDisk' = ''
+        'UpdDisk'   = ''
 
-        'NewScan' = @'
+        'NewScan'   = @'
             INSERT OR IGNORE INTO `Scan` (
                 `DiskID`,
                 `HostID`,
@@ -619,9 +619,11 @@ function Update-DB (
             );
 '@
 
-        'UpdScan' = 'UPDATE `Scan` SET `Archived` = 0 WHERE `DiskID` = @DiskID;'
+        'UpdScan'   = 'UPDATE `Scan` SET `Archived` = 0 WHERE `DiskID` = @DiskID;'
 
-        'aaaScan' = 'UPDATE `Scan` SET `Archived` = 1 WHERE `Archived` = 0;'  # autoarchive all records
+        'ScanArch+' = 'UPDATE `Scan` SET `Archived` = 1 WHERE `Archived` = 0;'  # autoarchive all records
+        
+        'ScanArch-' = 'UPDATE `Scan` SET `Archived` = 0 WHERE `Archived` = 1;'  # autoarchive all records
     }
 
 

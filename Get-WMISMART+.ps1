@@ -2,7 +2,8 @@
 
 <#
 .SYNOPSIS
-    сценарий в многопоточном режиме читает из WMI S.M.A.R.T. данные жёстких дисков указанного компьютера(-ов) и сохраняет отчёт в csv-формате
+    сценарий в многопоточном режиме собирает из WMI S.M.A.R.T. данные жёстких дисков указанного компьютера(-ов) и сохраняет отчёт в базу данных и в csv-файл в папке .\output
+
 
 .DESCRIPTION
     для корректной работы сценарий необходимо запускать из-под УЗ администратора целевого компьютера
@@ -10,54 +11,77 @@
     сценарий:
         сканирует одиночный хост либо список машин
         получает через WMI доступные S.M.A.R.T.-данные жёстких дисков
+        сохраняет отчёт в sqlite БД
         сохраняет отчёт в '.\output\yyyy-MM-dd $inp drives.csv'
+
 
 .INPUTS
     имя компьютера в формате "mylaptop"
         или
     csv-файл списка компьютеров
-    ожидаемый формат файла, первая строка содержит заголовки
+    
+    ожидаемый формат файла
         "HostName"
         "MyHomePC"
         "laptop"
-    коэффициент - кол-во потоков, которые будут запущены на каждом логическом ядре
+    где первая строка - заголовок, а остальные - имена компьютеров
 
-    в обязательном поле "HostName" указываются имена компьютеров
-    поле "ScanDate" может быть пустым, в него по окончании работы скрипта будет записать on-line/off-line статус компьютера
 
 .OUTPUTS
     csv-файл с "сырыми" S.M.A.R.T.-данными
 
+
 .PARAMETER Inp
-    имя компьютера или путь к csv-файлу списка компьютеров
+    имя компьютера / путь к списку компьютеров в формате csv
+
 
 .PARAMETER Out
     путь к файлу отчёта
 
+
 .PARAMETER k
-    кол-во потоков на логическое ядро, опытным путём на i5 оптимально k=35: минимальное время без ошибок нехватки памяти
+    кол-во потоков на логическое ядро
+    опытным путём на i5 + 8 GB RAM оптимально k=35..37: минимальное время без ошибок нехватки памяти
+
 
 .PARAMETER t
-    пауза (в секундах) ожидания завершения потоков перед их повторной проверкой. Необходимо для отсева потоков, "зависших" на Get-WmiObject
+    пауза (в секундах) ожидания завершения потоков перед их повторной проверкой.
+    Необходима для корректного завершения "нормальных" и отсева "зависших" потоков (напр. при снятии S.M.A.R.T. на этапе Get-WmiObject)
+    
     таймаут (в минутах) для выхода из while-цикла сбора результатов потоков
-    1...3  для локальной машины должно хватить для корректного завершения сканирования
+    
+    1...3  должно хватить для корректного завершения сканирования локального компьютера
+    
     7...9+ для списка удалённых компьютеров
 
+
 .PARAMETER aa
-    автоархивация скан-записей перед пополнением БД свежими S.M.A.R.T.-данными
-    нужно для того, чтобы в отчёты попадали только данные по последнему сканированию
+    переключатель 0/1, нужен для выбора режима того, как формировать сводные отчёты
+    
+    0 - пометить все записи в таблице `Scan` как активные
+        В сводные отчёты попадут все диски за весь период сбора информации
+        Т.е. даже не смотря на фактическую замену ЖД на компьютере, данные по старому диску все равно попадут в отчёты
+        Этот режим может быть полезен, если необходимо увидеть всю картину целиком
+
+    1 - автоархивация скан-записей перед пополнением БД свежими S.M.A.R.T.-данными
+        Сводные отчёты будут строиться на основании записей только тех дисков, с чьих компьютеров удастся получить S.M.A.R.T. в этот раз
+        Этот режим выбран по-умолчанию, т.к. отчёты покажут необходимый минимум информации, а если диск уже заменили, скан-записи старого диска будут помечены как архивные и не попадут в сводные отчёты
+
 
 .EXAMPLE
     .\Get-WMISMART.ps1 $env:COMPUTERNAME
         получить S.M.A.R.T. атрибуты дисков локального компьютера
 
+
 .EXAMPLE
     .\Get-WMISMART.ps1 HOST_NAME
         получить S.M.A.R.T. атрибуты компьютера HOST_NAME
 
+
 .EXAMPLE
     .\Get-WMISMART.ps1 .\input\example.csv -k 37 -t 13
         получить S.M.A.R.T. атрибуты дисков компьютеров списка .\input\example.csv, запустить maximum 37 потоков на ядро, пауза в 13 секунд и таймаут 13 минут
+
 
 .LINK
     github-page
@@ -65,6 +89,7 @@
 
     не очень корректное описание структуры 512-байт массива S.M.A.R.T.: тут написано, что 1й блок начинается сразу с 0го байта, а на самом деле первые два байта означают версию структуры S.M.A.R.T.
         https://social.msdn.microsoft.com/Forums/en-US/af01ce5d-b2a6-4442-b229-6bb32033c755/using-wmi-to-get-smart-status-of-a-hard-disk?forum=vbgeneral
+
 
 .NOTES
     Author: Dmitry Mikhaylov
@@ -96,6 +121,7 @@ Clear-Host
 $WatchDogTimer = [system.diagnostics.stopwatch]::startNew()
 
 $RootDir = $MyInvocation.MyCommand.Definition | Split-Path -Parent
+
 Set-Location $RootDir  # локальная корневая папка "./" = текущая директория скрипта
 
 Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогательный модуль с функциями
@@ -103,14 +129,38 @@ Import-Module -Name ".\helper.psm1" -verbose -Force  # вспомогатель�
 #endregion
 
 
-if (Test-Path -Path $inp) {$Computers = Import-Csv $inp} else {$Computers = (New-Object psobject -Property @{HostName = $inp;ScanDate = "";})}  # проверям, что в параметрах - имя хоста или файл-список хостов
+# проверям параметр inp - либо это файл-список хостов, либо считаем его именем хоста
+if (Test-Path -Path $inp)
+
+{
+    $Computers = Import-Csv $inp
+}
+
+else
+
+{
+    $Computers = (New-Object psobject -Property @{HostName = $inp;ScanDate = "";})
+}
+
 
 $clones = ($Computers | Group-Object -Property HostName | Where-Object {$_.Count -gt 1} | Select-Object -ExpandProperty Group)  # проверка на дубликаты
-if ($clones -ne $null) {Write-Host "'$inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"}
 
-if (Test-Path $out) {Remove-Item -Path $out -Force}  # отчёт по дискам
+if ($clones -ne $null)
+
+{
+    Write-Host "'$inp' содержит дубликаты, это увеличит время получения результата", $clones.HostName -ForegroundColor Red -Separator "`n"
+}
+
+
+if (Test-Path $out)
+
+{
+    Remove-Item -Path $out -Force  # кому нужен старый отчёт по дискам ?!
+}
+
 
 $ComputersOnLine = @()
+
 $DiskInfo = @()
 
 
@@ -119,10 +169,15 @@ $DiskInfo = @()
 #region: инициализация пула
 
 $x = $Computers.Count / [int] $env:NUMBER_OF_PROCESSORS
+
 $max = if (($x + 1) -lt $k) {[int] $env:NUMBER_OF_PROCESSORS * ($x + 1) + 1} else {[int] $env:NUMBER_OF_PROCESSORS * $k}
+
 $Pool = [RunspaceFactory]::CreateRunspacePool(1, $max)
+
 $Pool.ApartmentState = "MTA"
+
 $Pool.Open()
+
 $RunSpaces = @()
 
 #endregion
@@ -135,6 +190,7 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
     Write-Debug $name -Debug
 
     for ($i = 0; $i -lt 2; $i++)
+    
     {
 
         $WMIInfo = @()
@@ -142,34 +198,63 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
         $ping = (Test-Connection -Count 1 -ComputerName $name -Quiet)
 
         if ($ping)  # при удачном ping получаем данные
+        
         {
-            try {$Win32_DiskDrive = Get-WmiObject -ComputerName $name -class Win32_DiskDrive -ErrorAction Stop}
+            try
+            
+            {
+                $Win32_DiskDrive = Get-WmiObject -ComputerName $name -class Win32_DiskDrive -ErrorAction Stop
+            }
+            
             catch {break}
 
+            
             foreach ($Disk in $Win32_DiskDrive)
+            
             {
                 $wql = "InstanceName LIKE '%$($Disk.PNPDeviceID.Replace('\', '_'))%'"  # в wql-запросе запрещены '\', поэтому заменим их на '_' (что означает "один любой символ"), см. https://msdn.microsoft.com/en-us/library/aa392263(v=vs.85).aspx
 
+                
                 # смарт-атрибуты, флаги
-                try {$WMIData = (Get-WmiObject -ComputerName $name -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific}
+                try
+                
+                {
+                    $WMIData = (Get-WmiObject -ComputerName $name -namespace root\wmi -class MSStorageDriver_FailurePredictData -Filter $wql -ErrorAction Stop).VendorSpecific
+                }
+                
                 catch {$WMIData = @()}
 
-                if ($WMIData.Length -ne 512)
+                
+                if ($WMIData.Length -ne 512)  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
+                
                 {
                     Write-Host "`t", $Disk.Model, "- в WMI нет данных S.M.A.R.T." -ForegroundColor DarkYellow
                     continue
-                }  # если данные не получены, не будем дёргать WMI ещё дважды вхолостую, переход к следующему диску хоста
+                }
 
+                
                 # пороговые значения
-                try {$WMIThresholds = (Get-WmiObject -ComputerName $name -namespace root\wmi -Class MSStorageDriver_FailurePredictThresholds -Filter $wql -ErrorAction Stop).VendorSpecific}
+                try
+                
+                {
+                    $WMIThresholds = (Get-WmiObject -ComputerName $name -namespace root\wmi -Class MSStorageDriver_FailurePredictThresholds -Filter $wql -ErrorAction Stop).VendorSpecific
+                }
+                
                 catch {$WMIThresholds = @()}
 
-                # статус диска (Windows OS IMHO)
-                try {$WMIStatus = (Get-WmiObject -ComputerName $name -namespace root\wmi –class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure}  # ИСТИНА (TRUE), если прогнозируется сбой диска. В этом случае нужно немедленно выполнить резервное копирование диска
+                
+                # статус диска (Windows OS IMHO) = true, если ОС прогнозирует сбой диска (и, как правило, при этом советует выполнить резервное копирование)
+                try
+                
+                {
+                    $WMIStatus = (Get-WmiObject -ComputerName $name -namespace root\wmi –class MSStorageDriver_FailurePredictStatus -Filter $wql -ErrorAction Stop).PredictFailure
+                }
+                
                 catch {$WMIStatus = $null}
 
+                
                 # добавляем новый диск в массив отчёта по дискам
-                Import-Module -Name ".\helper.psm1" -verbose
+                # Import-Module -Name ".\helper.psm1" -verbose
                 $WMIInfo += New-Object psobject -Property @{
                     ScanDate      =          $('{0:yyyy.MM.dd}' -f $(Get-Date))
                     HostName      = [string] $name
@@ -207,15 +292,21 @@ $Payload = {Param ([string] $name = $env:COMPUTERNAME)
 #region: запускаем задание и добавляем потоки в пул
 
 foreach ($C in $Computers)
+
 {
     $NewShell = [PowerShell]::Create()
 
+    
     $null = $NewShell.AddScript($Payload)
+    
     $null = $NewShell.AddArgument($C.HostName)
 
+    
     $NewShell.RunspacePool = $Pool
 
+    
     $RunSpace = [PSCustomObject]@{ Pipe = $NewShell; Status = $NewShell.BeginInvoke() }
+    
     $RunSpaces += $RunSpace
 }
 
@@ -225,37 +316,53 @@ foreach ($C in $Computers)
 #region: после завершения каждого потока собираем его данные и закрываем, а после завершения всех потоков закрываем пул
 
 $dctCompleted = @{}  # словарь завершенных заданий
+
 $dctHang = @{}  # незавершённые задания
+
 $total = $RunSpaces.Count  # общее кол-во потоков
 
 # в случае локального компьютера поток может завершиться до начала цикла, и чтобы получить данные нужно выполнить его хотя бы один раз
 While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $true}).Count) )
+
 {
     $wpCompl   = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных,   ЗАВЕРШЁННЫЕ потоки"
+    
     $wpNoCompl = "Проверка компьютера ping'ом и сбор S.M.A.R.T. данных, НЕЗАВЕРШЁННЫЕ потоки"
 
+    
     $c_true = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $true}  # сначала отфильтруем только завершённые задания
+    
     $c_true_filtred = $c_true | Where-Object -FilterScript {!$dctCompleted.ContainsKey($_.Pipe.InstanceId.Guid)}  # затем только те, которые ещё не обрабатывали, т.е. которые пока не попали в словарь $dctCompleted
 
+    
     foreach ($RS in $c_true_filtred)  # цикл по завершённым_факт, который ещё нет в словаре (завершённых_учёт)
+    
     {
         $Result = @()
 
         if($RS.Status.IsCompleted -and !$dctCompleted.ContainsKey($RS.Pipe.InstanceId.Guid))
+        
         {
             $Result = $RS.Pipe.EndInvoke($RS.Status)
+            
             $RS.Pipe.Dispose()
 
+            
             $ComputersOnLine += $Result[0]
+            
             if ($Result[1].Count -gt 0) {$DiskInfo += $Result[1]}
 
             $dctCompleted[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
 
             $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
+            
             Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
+            
             Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
 
+            
             if($dctHang.ContainsKey($RS.Pipe.InstanceId.Guid))
+            
             {
                 $dctHang.Remove($RS.Pipe.InstanceId.Guid)
             }
@@ -264,25 +371,36 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
 
 
     # Start-Sleep -Milliseconds 100
+    
     $c_false = $RunSpaces | Where-Object -FilterScript {$_.Status.IsCompleted -eq $false}
 
     foreach($RS in $c_false)  # цикл по незавершённым
+    
     {
         $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
 
         Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
+        
         Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
 
         $dctHang[$RS.Pipe.InstanceId.Guid] = $WatchDogTimer.Elapsed.TotalSeconds
 
-        if ($c_false.Count -ne $p) {break}
+        if ($c_false.Count -ne $p)
+        
+        {
+            break
+        }
     }
 
+    
     # Start-Sleep -Milliseconds 100
+    
     $p = ($RunSpaces.Status | Where-Object -FilterScript {$_.IsCompleted -eq $false}).Count  # кол-во незавершённых потоков
 
     Write-Progress -id 2 -PercentComplete (100 * $p / $total) -Activity $wpNoCompl -Status "всего: $total" -CurrentOperation "осталось: $p"
+    
     Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Yellow
+    
     Write-Progress -id 1 -PercentComplete (100 * ($dctCompleted.Count) / $total) -Activity $wpCompl -Status "всего: $total" -CurrentOperation "готово: $($dctCompleted.Count)"
 
     #         кол-во зависших не изменилось                                          И  (завершён хотя бы один И всего хотя бы 2)
@@ -290,6 +408,7 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
     #                                   И  всего = завершёнка_учёт + не_завершёнка_факт         ^это^ условие означает что мог быть запущен один поток и он же мог зависнуть
 
     if ($escape)
+    
     {
         Start-Sleep -Seconds $t  # пауза чтобы завершить опоздавшие потоки и не ждать лишний раз "зависшие"
 
@@ -298,10 +417,12 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
         $escape = ($p -eq $dctHang.Count) -and ($total -eq ($dctCompleted.Count + $p)) -and ( $(if ($total -gt $p) {$dctCompleted.Count -gt 0} else {$true}) )
 
         if ($escape)
+        
         {
             if ($p -gt 0)
+            
             {
-                Write-Host 'пауза в' $t 'сек закончилась. Зависло потоков:' $p 'шт. Выход из Multi-Threading-цикла...' -ForegroundColor Red
+                Write-Host "пауза в $t сек закончилась. Всего зависло потоков: $p `n Multi-Threading режим сбора S.M.A.R.T. завершён...`n" -ForegroundColor Red
             }
             
             Write-Host "timer:" $WatchDogTimer.Elapsed.TotalSeconds, "`tdctCompleted:", $dctCompleted.Count,  "`tdctHang:",$dctHang.Count,  "`tосталось, `$p:",$p -ForegroundColor Magenta
@@ -314,7 +435,7 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
         else
 
         {
-            Write-Host -ForegroundColor Green 'пауза в', $t, 'сек закончилась. Эх раз, ещё раз... :-)'
+            Write-Host -ForegroundColor Green 'пауза в', $t, 'сек закончилась. Проверим незавершённые потоки ещё раз... :-)'
         }
     }
 
@@ -326,6 +447,7 @@ While ($RunSpaces.Status.IsCompleted -contains $false -or ($total -eq ($RunSpace
 
 
     if ($WatchDogTimer.Elapsed.TotalMinutes -gt $t)
+    
     {
         break  # внештатное завершение while-цикла по таймауту, в минутах
     }
@@ -352,6 +474,7 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Multi-Threading passe
 
 
 foreach($d in $DiskInfo){$d.SerialNumber = (Convert-hex2txt -wmisn $d.SerialNumber)}  # при необходимости приводим серийные номера в читаемый формат
+
 Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): SerialNumber`s converted' -ForegroundColor Cyan
 
 
@@ -380,6 +503,7 @@ if ($DiskInfo.Count -gt 0)
     
     {
         $ComputersOnLine += ($Computers | Where-Object -FilterScript {$_.HostName -notin $ComputersOnLine.HostName})  # | Select-Object -Property 'HostName')
+        
         $ComputersOnLine | Select-Object 'HostName' | Sort-Object -Property 'HostName' | Export-Csv -Path $inp -NoTypeInformation -Encoding UTF8
     }
 }
@@ -395,7 +519,13 @@ Write-Host $WatchDogTimer.Elapsed.TotalSeconds 'second(s): Export-Csv completed'
 if ($aa)
 
 {
-    $null = Update-DB -tact aaaScan
+    $null = Update-DB -tact ScanArch+
+}
+
+else
+
+{
+    $null = Update-DB -tact ScanArch-
 }
 
 
