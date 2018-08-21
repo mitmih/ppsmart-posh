@@ -527,7 +527,7 @@ GROUP BY Scan.DiskID;
 function Update-DB (
     [parameter(Mandatory=$true, ValueFromPipeline=$false)] [string]$tact = $null,
     
-    [parameter(Mandatory=$true, ValueFromPipeline=$false)]         $obj  = $null,
+    [parameter(Mandatory=$false, ValueFromPipeline=$false)]        $obj  = $null,
     
     [parameter(Mandatory=$false, ValueFromPipeline=$false)]   [int]$id   = $null
 )
@@ -620,6 +620,8 @@ function Update-DB (
 '@
 
         'UpdScan' = 'UPDATE `Scan` SET `Archived` = 0 WHERE `DiskID` = @DiskID;'
+
+        'aaaScan' = 'UPDATE `Scan` SET `Archived` = 1 WHERE `Archived` = 0;'  # autoarchive all records
     }
 
 
@@ -649,7 +651,11 @@ function Update-DB (
         
         $sql.CommandText = $dctQuery[$tact]
         
-        $objValidProperties = $obj | Get-Member -MemberType Properties -ErrorAction Stop
+        if ($obj -ne $null)
+        
+        {        
+            $objValidProperties = $obj | Get-Member -MemberType Properties -ErrorAction Stop
+        }
 
         foreach ($p in $objValidProperties)
         
