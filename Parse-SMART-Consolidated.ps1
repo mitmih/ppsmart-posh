@@ -5,7 +5,7 @@
     расшифровывает результаты .\Get-WMISMART.ps1 и формирует сводные отчёты
 
 .DESCRIPTION
-    сценарий расшифровывает "сырые" S.M.A.R.T. данные, полученные в ходе работы .\Get-WMISMART.ps1 и сохранённые в sqlite БД 
+    сценарий расшифровывает "сырые" S.M.A.R.T. данные, полученные в ходе работы .\Get-WMISMART.ps1 и сохранённые в sqlite БД
     формирует два сводных отчёта:
         отчёт по деградациям дисков с растущим значением переназначенных секторов
         отчёт по стабильным дискам, у которых количество переназначенных секторов не меняется между сканированиями
@@ -21,9 +21,9 @@
 .PARAMETER ReportDir
     папка для сохранения отчётов
 
-.PARAMETER 5edge
+.PARAMETER edge5
     пороговое значение 5-го атрибута (remap), начиная с которого стабильный диск попадёт в отчёт
-    не влияет на формирование отчёта по деградациям, т.е. если в 1й раз у диска было 0 remap`ов, а во 2й раз 1+, то при любом значении 5edge диск попадает в отчет по деградациям
+    не влияет на формирование отчёта по деградациям, т.е. если в 1й раз у диска было 0 remap`ов, а во 2й раз 1+, то при любом значении edge5 диск попадает в отчет по деградациям
     0 - отчёт по всем дискам
     1 - отчёт по дискам с количеством remap`ов 1+
 
@@ -41,7 +41,7 @@
         сохранить сводные отчёты в подпапке 'output'
 
 .EXAMPLE
-    .\Parse-SMART.ps1 -ReportDir QWERTY -5edge 10 -csv 0 -html 1
+    .\Parse-SMART.ps1 -ReportDir QWERTY -edge5 10 -csv 0 -html 1
         сохранить сводные отчёты в подпапке 'QWERTY'
         в отчёт по стабильным дискам включить те, у которых 5й атрибут имеет значение от 10 и выше remap`ов
         csv-отчёты не требуются
@@ -65,7 +65,7 @@
 param
 (
      [string] $ReportDir  = 'output', # директория для вывода отчётов
-     [int]    $5edge      = 1,        # начиная с какого значения remap добалять диск в отчёт
+     [int]    $edge5      = -1,        # начиная с какого значения remap добалять диск в отчёт
      [int]    $csv        = 1,        # формировать csv
      [int]    $html       = 1,        # формировать html
      [string] $ReportName = '_Report Consolidated'
@@ -142,7 +142,8 @@ foreach ($hd in $data.Tables.Rows)  # обрабатываем результа�
 
     $dctRes = Get-RawValues -wmi $hd.WMIData
 
-    (9,5,184,187,197,198,200) | foreach { $Disk | Add-Member -MemberType NoteProperty -Name $_ -Value $dctRes[$_] }
+    (9, 5, 184, 187, 197, 198, 200, 10, 11, 188, 196, 199, 1, 7, 195) |
+        ForEach-Object { $Disk | Add-Member -MemberType NoteProperty -Name $_ -Value $dctRes[$_] }
 
     $AllInfo += $Disk
 }
@@ -164,11 +165,11 @@ $eoDegr = 0  #
 
 foreach ($g in $AllInfo | Sort-Object -Property SerialNumber,ScanDate | Group-Object -Property SerialNumber)
 {
-    # вырезаем из отчёта диски, у которых на последнем скане remap <= $5edge
+    # вырезаем из отчёта диски, у которых на последнем скане remap <= $edge5
     $5val = ($g | Select-Object -ExpandProperty Group | Sort-Object -Property '5' | Select-Object -Last 1)
-    if ($5val.'5' -lt $5edge)
+    if ($5val.'5' -lt $edge5)
     {
-        # Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $5edge (edge)" -ForegroundColor Yellow
+        # Write-Host "excluded:`t" $5val.HostName "`t (fact) $($5val.'5') < $edge5 (edge)" -ForegroundColor Yellow
         continue
     }
 
@@ -224,7 +225,18 @@ $ReportSelectProperties = @(
     @{Expression = { $_.'187' }; Name='187 Reported Uncorrectable Errors'},
     @{Expression = { $_.'197' }; Name='197 Current Pending Sector Count'},
     @{Expression = { $_.'198' }; Name='198 (Offline) Uncorrectable Sector Count'},
-    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'}
+    @{Expression = { $_.'200' }; Name='200 Multi-Zone Error Rate / Write Error Rate (Fujitsu)'},
+
+    @{Expression = { $_.'10' }; Name='10 Spin Retry Count'},
+    @{Expression = { $_.'11' }; Name='11 Recalibration Retries or Calibration Retry Count'},
+    @{Expression = { $_.'188' }; Name='188 Command Timeout'},
+    @{Expression = { $_.'196' }; Name='196 Reallocation Event Count'},
+    @{Expression = { $_.'199' }; Name='199 UltraDMA CRC Error Count'},
+
+    @{Expression = { $_.'1' }; Name='1 Read Error Rate'},
+    @{Expression = { $_.'7' }; Name='7 Seek Error Rate'},
+    @{Expression = { $_.'195' }; Name='195 Hardware ECC Recovered'}
+
 )
 
 $ReportSortProperties = @(
@@ -372,7 +384,7 @@ $ConvertHtmlParams = @{
 
     ConvertTo-Html @ConvertHtmlParams | Out-File $htmlReport
 
-    Invoke-Item $htmlReport
+#     Invoke-Item $htmlReport
 
     # $IE=new-object -com internetexplorer.application
     # $IE.navigate2($htmlReport)
